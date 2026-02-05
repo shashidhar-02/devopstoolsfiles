@@ -13,9 +13,10 @@ Comprehensive security hardening has been implemented across the DevOps reposito
 ### 1. ✅ Docker Image Optimization (Distroless Base Images)
 
 #### Node.js Application (Frontend)
+
 - **Before**: `node:18-alpine` (Multiple CVEs, OS layer vulnerabilities)
 - **After**: `gcr.io/distroless/nodejs18-debian11:nonroot` (Zero CVE base)
-- **Benefits**: 
+- **Benefits**:
   - 50-70% smaller image size
   - No shell (can't be exploited interactively)
   - No OS package manager (can't install backdoors)
@@ -25,6 +26,7 @@ Comprehensive security hardening has been implemented across the DevOps reposito
 **Implementation**: [docker/Dockerfile](docker/Dockerfile)
 
 #### Java Application (Backend)  
+
 - **Before**: `eclipse-temurin:17-jre-alpine` (~20 CVEs)
 - **After**: `gcr.io/distroless/java17-debian11:nonroot` (Zero CVE base)
 - **Benefits**:
@@ -36,6 +38,7 @@ Comprehensive security hardening has been implemented across the DevOps reposito
 **Implementation**: [docker/Dockerfile.java](docker/Dockerfile.java)
 
 #### Supporting Services
+
 - **Nginx**: Pinned to `nginx:1.25.3-alpine` (specific version, not :latest)
 - **PostgreSQL**: Pinned to `postgres:15.5-alpine` (specific version)
 - **Redis**: Pinned to `redis:7.2-alpine` (specific version)
@@ -48,7 +51,8 @@ Comprehensive security hardening has been implemented across the DevOps reposito
 
 ### 2. ✅ Security Contexts & Capabilities Hardening
 
-#### All Services Configured With:
+#### All Services Configured With
+
 ```yaml
 security_opt:
   - no-new-privileges:true    # Prevents privilege escalation
@@ -60,7 +64,8 @@ cap_add:
 user: "999"                    # Run as non-root (UID varies per service)
 ```
 
-#### Per-Service Configuration:
+#### Per-Service Configuration
+
 - **Frontend/Backend**: UID 65534 (nobody), no capabilities
 - **Database**: UID 999 with required CHOWN/SETUID
 - **Prometheus**: UID 65534, minimal capabilities
@@ -72,11 +77,13 @@ user: "999"                    # Run as non-root (UID varies per service)
 
 ### 3. ✅ Secrets Management Hardening
 
-#### Implementation:
+#### Implementation
+
 - **Before**: Secrets in environment variables (visible in `docker inspect`)
 - **After**: Secrets from `/run/secrets/` files (proper Docker Swarm/Kubernetes secret mounting)
 
-#### Secrets Now Managed:
+#### Secrets Now Managed
+
 ```
 - prod_db_password.txt
 - prod_replication_password.txt
@@ -88,7 +95,8 @@ user: "999"                    # Run as non-root (UID varies per service)
 - prod_db_key.pem
 ```
 
-#### Production Usage:
+#### Production Usage
+
 ```bash
 # Secrets mounted at runtime
 docker run --secret db_password \
@@ -103,6 +111,7 @@ docker run --secret db_password \
 ### 4. ✅ Docker-Compose Production Hardening
 
 #### New File: `docker-compose-prod-hardened.yml`
+
 - All services pinned to specific image versions
 - Security contexts applied to every service
 - Non-root users for all services
@@ -168,6 +177,7 @@ Comprehensive security scanning in CI/CD:
 ### 6. ✅ Security Documentation & Policies
 
 #### Main Security Policy: `SECURITY.md`
+
 - Vulnerability disclosure process
 - Severity level definitions
 - Automated scanning tools documentation
@@ -182,6 +192,7 @@ Comprehensive security scanning in CI/CD:
 **Location**: [SECURITY.md](SECURITY.md)
 
 #### DevSecOps Configuration: `.devsecops-config.yml`
+
 - Detailed scanner configurations (Trivy, Checkov, Safety, npm audit, Semgrep)
 - Security policies (base images, runtime security, Kubernetes, Terraform)
 - Compliance requirements mapping
@@ -191,6 +202,7 @@ Comprehensive security scanning in CI/CD:
 **Location**: [.devsecops-config.yml](.devsecops-config.yml)
 
 #### Security Scanning Makefile: `docker/Makefile.security`
+
 - `make security-scan`: Run all scans
 - `make docker-scan`: Scan Docker images with Trivy
 - `make iac-scan`: Scan Infrastructure as Code
@@ -207,7 +219,9 @@ Comprehensive security scanning in CI/CD:
 ### 7. ✅ Dependency Management & Pinning
 
 #### Python Security Requirements: `python/security-requirements.txt`
+
 All Python dependencies pinned to specific versions:
+
 ```
 boto3>=1.28.0,<2.0.0
 requests>=2.31.0,<3.0.0
@@ -218,6 +232,7 @@ cryptography>=41.0.0,<42.0.0
 **Location**: [python/security-requirements.txt](python/security-requirements.txt)
 
 **Usage**:
+
 ```bash
 # Verify no vulnerabilities
 safety check -r python/security-requirements.txt
@@ -229,6 +244,7 @@ pip-audit
 ### 8. ✅ Environment Configuration Template
 
 #### File: `.env.example`
+
 - Template for production configuration
 - Security notes on secret management
 - AWS region configuration
@@ -243,6 +259,7 @@ pip-audit
 ### 9. ✅ CVE Exception Management
 
 #### File: `.trivyignore`
+
 - Format: CVE-ID expiry date justification
 - For tracking approved security exceptions
 - Empty by default (zero tolerance policy)
@@ -269,14 +286,16 @@ pip-audit
 
 ### Base Image CVE Counts (as of 2024)
 
-#### Before Hardening:
+#### Before Hardening
+
 - `node:18-alpine`: ~10-15 CVEs per scan
 - `maven:3.9-eclipse-temurin-17-alpine`: ~8-12 CVEs
 - `eclipse-temurin:17-jre-alpine`: ~20 CVEs
 - `postgres:15-alpine`: ~5-8 CVEs (Alpine acceptable for data layer)
 - **TOTAL**: 40+ vulnerabilities in base images
 
-#### After Hardening:
+#### After Hardening
+
 - `gcr.io/distroless/nodejs18-debian11:nonroot`: 0 CVEs
 - `gcr.io/distroless/java17-debian11:nonroot`: 0 CVEs
 - `postgres:15.5-alpine`: ~3-5 CVEs (acceptable, minimal risk)
@@ -290,6 +309,7 @@ pip-audit
 ## What Still Needs Review (Next Phase)
 
 ### 3️⃣ Terraform Security Hardening
+
 - IAM policy least-privilege audit
 - Encryption validation (at rest & in transit)  
 - S3 bucket security review
@@ -297,6 +317,7 @@ pip-audit
 - OPA policy enforcement
 
 ### 4️⃣ Ansible & Python Application Security
+
 - Vault encryption for Ansible secrets
 - Python input validation and error handling
 - SQL injection prevention verification
@@ -327,7 +348,7 @@ cat security-scan-results/checkov-*.json
 
 ## Deployment Checklist
 
-### Before Deploying Production:
+### Before Deploying Production
 
 - [ ] Generate all secrets: `db_password`, `jwt_secret`, `redis_password`, `grafana_password`
 - [ ] Create directories: `/mnt/postgres/{master,replica}`
@@ -358,15 +379,18 @@ cat security-scan-results/checkov-*.json
 ## Maintenance & Updates
 
 ### Weekly
+
 - [ ] Check for new CVEs: `pip list --outdated`, `npm outdated`
 - [ ] Review GitHub Dependabot alerts
 
 ### Monthly  
+
 - [ ] Run full security scans: `make security-scan`
 - [ ] Update base images to latest patches
 - [ ] Review and merge Dependabot PRs
 
 ### Quarterly
+
 - [ ] Security audit of entire infrastructure
 - [ ] Rotate all secrets (db_password, jwt_secret, etc.)
 - [ ] Review access logs for suspicious activity
@@ -376,7 +400,7 @@ cat security-scan-results/checkov-*.json
 
 ## Support & Questions
 
-- **Security Questions**: Email security@example.com
+- **Security Questions**: Email <security@example.com>
 - **Bug Reports**: Create private security advisory on GitHub
 - **Vulnerability Disclosure**: See SECURITY.md for process
 
@@ -384,7 +408,8 @@ cat security-scan-results/checkov-*.json
 
 ## Files Created/Modified
 
-### New Files Created:
+### New Files Created
+
 - ✅ `docker/Dockerfile` (Updated with distroless)
 - ✅ `docker/Dockerfile.java` (Updated with distroless)
 - ✅ `docker/docker-compose-prod-hardened.yml` (New: security-hardened)
@@ -396,7 +421,8 @@ cat security-scan-results/checkov-*.json
 - ✅ `.env.example` (New: secure config template)
 - ✅ `python/security-requirements.txt` (New: pinned dependencies)
 
-### Modified Files:
+### Modified Files
+
 - ✅ `docker/Dockerfile` (Distroless Node.js base)
 - ✅ `docker/Dockerfile.java` (Distroless Java runtime)
 

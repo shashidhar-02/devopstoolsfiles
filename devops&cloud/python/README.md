@@ -16,6 +16,7 @@ This module contains 4 comprehensive Python tools demonstrating essential DevOps
 ## Installation
 
 ### Requirements
+
 - Python 3.8+
 - AWS credentials configured (for S3 features)
 - MySQL client (for database backups)
@@ -34,6 +35,7 @@ pip install -r requirements.txt
 **Purpose**: Identify and remove unused AWS resources to reduce cloud costs.
 
 **Features**:
+
 - Identify stopped EC2 instances (configurable days threshold)
 - Find unattached EBS volumes
 - Discover unassociated Elastic IPs
@@ -58,6 +60,7 @@ python aws_cleanup.py --region us-west-2 --log-file cleanup.log --log-level DEBU
 ```
 
 **Output**:
+
 ```json
 {
   "timestamp": "2024-02-05T12:00:00",
@@ -80,6 +83,7 @@ python aws_cleanup.py --region us-west-2 --log-file cleanup.log --log-level DEBU
 ```
 
 **Code Example - Retry Decorator**:
+
 ```python
 @retry_on_exception(max_retries=3, backoff_factor=2)
 def get_stopped_instances(self, days=7):
@@ -92,6 +96,7 @@ def get_stopped_instances(self, days=7):
 **Purpose**: Process monitoring alerts and route them to multiple destinations.
 
 **Features**:
+
 - JSON/YAML serialization for alerts
 - Multiple router implementations: Slack, PagerDuty, Email
 - YAML-based configuration
@@ -139,6 +144,7 @@ python alert_handler.py process-file \
 ```
 
 **Code Example - Alert Model**:
+
 ```python
 @dataclass
 class Alert:
@@ -158,6 +164,7 @@ class Alert:
 ```
 
 **Alert Routing Example**:
+
 ```python
 # Slack webhook integration
 alert_msg = {
@@ -189,6 +196,7 @@ pagerduty_event = {
 **Purpose**: Validate CI/CD builds, Docker images, and Kubernetes deployments.
 
 **Features**:
+
 - Build artifact validation
 - Test suite execution with timeout
 - Docker image validation via registry API
@@ -226,6 +234,7 @@ python ci_helper.py check-deployment \
 ```
 
 **Code Example - Validation Pipeline**:
+
 ```python
 def validate_deployment(self) -> bool:
     """Complete validation pipeline"""
@@ -240,6 +249,7 @@ def validate_deployment(self) -> bool:
 ```
 
 **Kubernetes Integration**:
+
 ```python
 def validate_k8s_deployment(self) -> bool:
     """Check deployment is ready"""
@@ -256,6 +266,7 @@ def validate_k8s_deployment(self) -> bool:
 **Purpose**: Automated backup and recovery for databases and files.
 
 **Features**:
+
 - MySQL backup using mysqldump
 - File system backup using tar
 - Gzip compression
@@ -292,6 +303,7 @@ python backup_tool.py s3-upload \
 ```
 
 **Backup Metadata** (`mysql_myapp_20240205_120000.json`):
+
 ```json
 {
   "name": "mysql_myapp",
@@ -304,6 +316,7 @@ python backup_tool.py s3-upload \
 ```
 
 **Backup Flow**:
+
 ```
 1. Start backup (record timestamp)
 2. Execute dump/tar command
@@ -317,6 +330,7 @@ python backup_tool.py s3-upload \
 ## Key Patterns Demonstrated
 
 ### 1. Retry Logic
+
 ```python
 # Decorator pattern for automatic retries
 @retry_on_exception(max_retries=3, backoff_factor=2)
@@ -333,6 +347,7 @@ session.mount("https://", adapter)
 ```
 
 ### 2. Error Handling
+
 ```python
 # Specific exception handling
 try:
@@ -343,6 +358,7 @@ except requests.exceptions.RequestException as e:
 ```
 
 ### 3. Configuration Management
+
 ```python
 # YAML configuration loading
 with open("config.yaml", "r") as f:
@@ -354,6 +370,7 @@ with open("report.json", "w") as f:
 ```
 
 ### 4. Subprocess Integration
+
 ```python
 # Safe subprocess execution
 result = subprocess.run(
@@ -365,6 +382,7 @@ result = subprocess.run(
 ```
 
 ### 5. Dataclasses for Type Safety
+
 ```python
 @dataclass
 class Alert:
@@ -379,6 +397,7 @@ class Alert:
 ## Best Practices
 
 ### AWS Usage
+
 - Always use IAM roles instead of access keys (when possible)
 - Implement dry-run mode to validate before execution
 - Log all API calls for auditing
@@ -386,6 +405,7 @@ class Alert:
 - Track costs and cleanup regularly
 
 ### Database Backups
+
 - Store backups in multiple locations (local + S3)
 - Verify backup integrity with checksums
 - Test restore procedures regularly
@@ -393,6 +413,7 @@ class Alert:
 - Monitor backup completion times
 
 ### Alert Routing
+
 - Filter alerts to reduce noise
 - Use appropriate severity levels
 - Include context metadata
@@ -400,6 +421,7 @@ class Alert:
 - Archive alerts for analysis
 
 ### CI/CD Integration
+
 - Validate before deployment
 - Use timeout values to prevent hanging
 - Log detailed error messages
@@ -409,6 +431,7 @@ class Alert:
 ## Troubleshooting
 
 ### AWS Cleanup Issues
+
 ```bash
 # Check AWS credentials
 aws sts get-caller-identity
@@ -421,6 +444,7 @@ python aws_cleanup.py --region us-east-1 --log-level DEBUG
 ```
 
 ### Alert Handler Issues
+
 ```bash
 # Validate configuration
 python -c "import yaml; yaml.safe_load(open('alert_config.yaml'))"
@@ -432,6 +456,7 @@ curl -X POST -H 'Content-type: application/json' \
 ```
 
 ### CI Helper Issues
+
 ```bash
 # Verify kubectl access
 kubectl cluster-info
@@ -442,6 +467,7 @@ curl -u username:password https://registry-url/v2/
 ```
 
 ### Backup Issues
+
 ```bash
 # Verify MySQL access
 mysql -h host -u user -p -e "SELECT VERSION();"
@@ -456,6 +482,7 @@ md5sum backup_file.tar.gz
 ## Integration Examples
 
 ### GitHub Actions Integration
+
 ```yaml
 - name: Validate Deployment
   run: |
@@ -465,6 +492,7 @@ md5sum backup_file.tar.gz
 ```
 
 ### Kubernetes CronJob
+
 ```yaml
 apiVersion: batch/v1
 kind: CronJob
@@ -488,6 +516,7 @@ spec:
 ```
 
 ### ECS Task Definition
+
 ```json
 {
   "name": "cleanup-task",

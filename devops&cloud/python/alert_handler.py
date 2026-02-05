@@ -243,7 +243,7 @@ class PagerDutyRouter(AlertRouter):
                     "timestamp": alert.timestamp,
                     "custom_details": {
                         "message": alert.message,
-                        **alert.metadata or {}
+                        **(alert.metadata or {})
                     }
                 }
             }
