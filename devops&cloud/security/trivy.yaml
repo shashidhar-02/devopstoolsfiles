@@ -1,0 +1,37 @@
+# Trivy configuration for DevSecOps scanning
+# Usage: trivy --config trivy.yaml fs .
+
+format: table
+exit-code: 1
+severity:
+  - CRITICAL
+  - HIGH
+ignorefile: .trivyignore
+
+scan:
+  scanners:
+    - vuln
+    - secret
+    - config
+    - license
+  skip-dirs:
+    - .git
+    - .vscode
+    - node_modules
+    - terraform/.terraform
+    - python/.venv
+
+vulnerability:
+  type:
+    - os
+    - library
+  ignore-unfixed: true
+  timeout: 5m
+
+cache:
+  dir: .trivy-cache
+
+report:
+  format: table
+  output: trivy-report.txt
+
