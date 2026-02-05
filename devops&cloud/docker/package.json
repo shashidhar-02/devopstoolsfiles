@@ -1,0 +1,41 @@
+{
+  "name": "devops-app",
+  "version": "1.0.0",
+  "description": "Production-grade Node.js application demonstrating Docker best practices",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "jest src/**/*.test.js",
+    "test:integration": "jest integration/*.test.js",
+    "build": "echo 'No build step needed for this app'",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
+    "security-check": "npm audit",
+    "docker:build": "docker build -t devops-app:latest .",
+    "docker:run": "docker run -p 3000:3000 devops-app:latest",
+    "docker:compose": "docker-compose up -d"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "nodemon": "^3.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "devops",
+    "docker",
+    "kubernetes",
+    "production"
+  ],
+  "author": "DevOps Team",
+  "license": "MIT"
+}
