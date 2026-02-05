@@ -441,12 +441,14 @@ docker run -p 8080:8080 -p 5005:5005 backend:latest
 ### Key Differences
 
 **Node.js Advantages:**
+
 - Faster build time (~30s)
 - Smaller image size (~150 MB)
 - Simple dependency management
 - Ideal for microservices
 
 **Java Advantages:**
+
 - Built-in dependency isolation (JAR files)
 - Type safety at compile time
 - Spring Boot Actuator for production health checks
@@ -456,6 +458,7 @@ docker run -p 8080:8080 -p 5005:5005 backend:latest
 ### Example Deployments
 
 **Frontend (Node.js)**:
+
 ```bash
 # Single container, stateless
 docker run -d \
@@ -465,6 +468,7 @@ docker run -d \
 ```
 
 **Backend (Java)**:
+
 ```bash
 # Connect to database and cache
 docker run -d \
@@ -870,6 +874,7 @@ secrets:
 ### Connecting to Services
 
 **Frontend (React)**:
+
 ```bash
 # Development
 curl http://localhost:3000
@@ -882,6 +887,7 @@ curl https://api.example.com
 ```
 
 **Backend API**:
+
 ```bash
 # Development
 curl http://localhost:8080/api/health
@@ -894,6 +900,7 @@ curl https://api.example.com/api/actuator/health
 ```
 
 **Database CLI**:
+
 ```bash
 # Development
 docker-compose -f docker-compose-dev.yml exec database psql -U devuser -d devdb
@@ -903,6 +910,7 @@ docker-compose -f docker-compose-dev.yml logs database
 ```
 
 **Redis Cache**:
+
 ```bash
 # Connect to Redis in staging/prod
 docker-compose -f docker-compose-staging.yml exec redis redis-cli
@@ -912,6 +920,7 @@ redis-cli> GET session:abc123
 ```
 
 **Monitoring (Production)**:
+
 ```bash
 # Prometheus metrics
 curl http://localhost:9090
@@ -922,8 +931,6 @@ curl http://localhost:3001
 # Backend metrics endpoint
 curl http://localhost:8080/actuator/prometheus
 ```
-
-
 
 **Kubernetes secrets (production)**:
 
