@@ -1,0 +1,45 @@
+# Jinja2 Template - app-config.yml.j2
+# Application configuration with dynamic values
+
+application:
+  name: {{ app_name }}
+  environment: {{ env }}
+  port: {{ app_port }}
+  workers: {{ app_workers }}
+  
+  # Conditional settings based on environment
+  debug: {{ 'false' if env == 'production' else 'true' }}
+  log_level: {{ 'info' if env == 'production' else 'debug' }}
+
+database:
+  host: {{ groups['dbservers'][0] if groups['dbservers'] is defined else 'localhost' }}
+  port: {{ db_port | default(3306) }}
+  name: {{ db_name }}
+  user: {{ db_user }}
+  # Password should come from vault
+  password: {{ vault_db_password }}
+  
+cache:
+  enabled: {{ enable_caching }}
+  ttl: {{ cache_ttl }}
+
+monitoring:
+  enabled: {{ monitoring_enabled }}
+  metrics_port: {{ metrics_port }}
+
+# Dynamic feature flags based on environment
+features:
+  auto_scaling: {{ 'true' if env == 'production' else 'false' }}
+  advanced_logging: {{ 'true' if env == 'production' else 'false' }}
+  rate_limiting: {{ 'true' if env == 'production' else 'false' }}
+
+# Resource thresholds for auto-scaling
+thresholds:
+  cpu: {{ cpu_threshold }}
+  memory: {{ memory_threshold }}
+
+# Host-specific information
+server:
+  hostname: {{ ansible_hostname }}
+  ip: {{ ansible_default_ipv4.address }}
+  os: {{ ansible_distribution }} {{ ansible_distribution_version }}

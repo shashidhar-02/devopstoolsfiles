@@ -1,0 +1,36 @@
+---
+# group_vars/webservers.yml
+# Variables specific to web servers
+
+# Application configuration
+app_name: "my-web-app"
+app_port: 8080
+app_workers: 4  # Will be scaled dynamically
+
+# Web server settings
+webserver_type: nginx
+nginx_version: "1.24"
+nginx_worker_processes: auto
+nginx_worker_connections: 1024
+
+# SSL/TLS
+ssl_enabled: true
+ssl_cert_path: "/etc/nginx/ssl/cert.pem"
+ssl_key_path: "/etc/nginx/ssl/key.pem"
+
+# Application deployment
+app_repo: "https://github.com/company/web-app.git"
+app_version: "{{ lookup('env', 'APP_VERSION') | default('main', true) }}"
+app_deploy_path: "/var/www/{{ app_name }}"
+
+# Health check
+health_check_url: "http://localhost:{{ app_port }}/health"
+health_check_interval: 30
+
+# Auto-scaling thresholds
+cpu_threshold: 70
+memory_threshold: 80
+
+# Conditional execution based on environment
+enable_caching: "{{ 'true' if env == 'production' else 'false' }}"
+cache_ttl: "{{ 3600 if env == 'production' else 300 }}"

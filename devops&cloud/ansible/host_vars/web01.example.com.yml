@@ -1,0 +1,18 @@
+---
+# host_vars/web01.example.com.yml
+# Host-specific variables for web01
+
+# This server handles more traffic
+app_workers: 8
+nginx_worker_processes: 8
+
+# Specific network configuration
+primary_interface: eth0
+ip_address: 10.0.1.10
+
+# Custom health check
+enable_advanced_monitoring: true
+
+# Specific SSL certificate
+ssl_cert_path: "/etc/nginx/ssl/web01-cert.pem"
+ssl_key_path: "/etc/nginx/ssl/web01-key.pem"

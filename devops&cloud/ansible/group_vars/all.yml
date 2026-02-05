@@ -1,0 +1,52 @@
+---
+# group_vars/all.yml
+# Variables applied to ALL hosts
+
+# SSH and Connection Settings
+ansible_connection: ssh
+ansible_port: 22
+ansible_become_method: sudo
+
+# Common packages for all servers
+common_packages:
+  - vim
+  - git
+  - htop
+  - curl
+  - wget
+  - net-tools
+  - rsync
+
+# NTP Configuration
+ntp_enabled: true
+ntp_servers:
+  - 0.pool.ntp.org
+  - 1.pool.ntp.org
+  - 2.pool.ntp.org
+
+# Security settings
+firewall_enabled: true
+selinux_state: enforcing
+
+# Logging
+log_retention_days: 30
+syslog_server: "10.0.4.10"
+
+# Monitoring
+monitoring_agent: "node_exporter"
+metrics_port: 9100
+
+# Backup settings
+backup_retention: 7
+backup_schedule: "0 2 * * *"  # 2 AM daily
+
+# Secret management (use Ansible Vault)
+# Run: ansible-vault encrypt group_vars/all.yml
+# or encrypt specific variables
+vault_db_password: !vault | 
+          $ANSIBLE_VAULT;1.1;AES256
+          # This should be encrypted in production
+
+# Error recovery settings
+max_retries: 3
+retry_delay: 5

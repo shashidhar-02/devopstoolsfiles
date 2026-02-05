@@ -1,0 +1,35 @@
+# Jinja2 Template - app-workers.conf.j2
+# Worker configuration for scaling
+
+# This file is templated and deployed for Day-2 operations (scaling)
+
+[workers]
+# Number of worker processes (dynamically scaled)
+count={{ app_workers }}
+
+# Worker settings based on environment
+{% if env == 'production' %}
+# Production settings - more conservative
+timeout=60
+max_requests=1000
+max_requests_jitter=50
+graceful_timeout=30
+{% else %}
+# Development/Staging - more relaxed
+timeout=30
+max_requests=100
+graceful_timeout=10
+{% endif %}
+
+# Auto-scaling based on thresholds
+autoscale_enabled={{ 'true' if env == 'production' else 'false' }}
+min_workers={{ app_workers // 2 }}
+max_workers={{ app_workers * 2 }}
+
+# Resource limits per worker
+cpu_limit={{ cpu_threshold }}%
+memory_limit={{ memory_threshold }}%
+
+# Host-specific worker count (host_vars override)
+# Current host: {{ inventory_hostname }}
+# Assigned workers: {{ app_workers }}

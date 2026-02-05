@@ -1,0 +1,93 @@
+---
+# roles/nginx/tasks/main.yml
+# Nginx installation and configuration - production-grade
+
+- name: Install Nginx (idempotent)
+  apt:
+    name: nginx
+    state: present
+  when: ansible_os_family == "Debian"
+  notify: restart nginx
+  tags: nginx
+
+- name: Ensure Nginx is enabled and started (idempotent)
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+  tags: nginx
+
+- name: Create SSL directory (idempotent)
+  file:
+    path: /etc/nginx/ssl
+    state: directory
+    mode: '0700'
+  when: ssl_enabled | bool
+  tags:
+    - nginx
+    - ssl
+
+- name: Deploy SSL certificates (conditional)
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: '0600'
+  loop:
+    - { src: "files/ssl/cert.pem", dest: "{{ ssl_cert_path }}" }
+    - { src: "files/ssl/key.pem", dest: "{{ ssl_key_path }}" }
+  when: ssl_enabled | bool
+  notify: reload nginx
+  ignore_errors: yes  # Error recovery - files might not exist in demo
+  tags:
+    - nginx
+    - ssl
+
+- name: Configure Nginx (Jinja2 templating)
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    mode: '0644'
+    validate: 'nginx -t -c %s'  # Validate before applying
+  notify: reload nginx
+  tags: nginx
+
+- name: Configure virtual host (Jinja2 templating)
+  template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/sites-available/{{ app_name }}"
+    mode: '0644'
+  notify: reload nginx
+  tags: nginx
+
+- name: Enable virtual host (idempotent symlink)
+  file:
+    src: "/etc/nginx/sites-available/{{ app_name }}"
+    dest: "/etc/nginx/sites-enabled/{{ app_name }}"
+    state: link
+  notify: reload nginx
+  tags: nginx
+
+- name: Remove default site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: reload nginx
+  tags: nginx
+
+- name: Allow Nginx through firewall
+  ufw:
+    rule: allow
+    name: 'Nginx Full'
+  when: firewall_enabled | bool
+  tags:
+    - nginx
+    - security
+
+# Playbook optimization - check before restart
+- name: Check Nginx configuration
+  command: nginx -t
+  changed_when: false
+  check_mode: no
+  register: nginx_test
+  failed_when: nginx_test.rc != 0
+  tags: nginx

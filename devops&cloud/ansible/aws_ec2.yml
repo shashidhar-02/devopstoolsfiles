@@ -1,0 +1,51 @@
+---
+# Dynamic Inventory for AWS EC2
+# Place this file in your inventory directory
+# Run: ansible-inventory -i aws_ec2.yml --list
+
+plugin: aws_ec2
+
+# AWS Regions to query
+regions:
+  - us-east-1
+  - us-west-2
+  - eu-west-1
+
+# Filters for instances
+filters:
+  instance-state-name: running
+  tag:Environment:
+    - production
+    - staging
+
+# Keyed groups based on tags
+keyed_groups:
+  # Group by environment tag
+  - key: tags.Environment
+    prefix: env
+  # Group by role tag
+  - key: tags.Role
+    prefix: role
+  # Group by instance type
+  - key: instance_type
+    prefix: type
+
+# Compose variables from instance attributes
+compose:
+  ansible_host: public_ip_address
+  ansible_user: "'ec2-user'"
+  ec2_instance_id: instance_id
+  ec2_region: placement.region
+  ec2_az: placement.availability_zone
+
+# Hostnames
+hostnames:
+  - tag:Name
+  - dns-name
+
+# Cache settings for performance
+cache: yes
+cache_plugin: jsonfile
+cache_timeout: 300
+cache_connection: /tmp/ansible_inventory_cache
+cache_prefix: aws_ec2
