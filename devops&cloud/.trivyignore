@@ -1,0 +1,18 @@
+# Trivy Ignore File
+# Format: CVE-ID expiry date justification
+# This file documents approved CVE exceptions with business justification
+
+# Common CVE Exceptions:
+# Format: <CVE-ID> exp:YYYY-MM-DD "Justification for using vulnerable package"
+
+# Example (keep commented out unless you have a real exception):
+# AVD-AV-0001 exp:2025-12-31 "False positive - component not exposed in this context"
+
+# Empty by default - add exceptions only with documented justification
+# Include the following before each exception:
+# - CVE ID and severity
+# - Affected package
+# - Why the vulnerability doesn't apply in our context
+# - Plan to remediate or upgrade
+# - Approval from security team
+
