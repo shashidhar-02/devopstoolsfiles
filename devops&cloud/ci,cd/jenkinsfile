@@ -1,0 +1,143 @@
+#end to end devsecops production ready code enterprise level
+#ci cd jenkinsfile with maven build sonar qube nexus docker kubernetes helm chart terraform
+#jenkinsfile declarative pipeline syntax with 20 stages
+pipeline {
+    agent any
+
+    environment {
+        MAVEN_HOME = tool 'Maven 3.6.3'
+        SONARQUBE = 'SonarQubeServer'
+        NEXUS_REPO = 'NexusRepo'
+        DOCKER_CREDENTIALS = 'DockerHubCredentials'
+        KUBE_CONFIG = credentials('KubeConfigCredentials')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh "${MAVEN_HOME}/bin/mvn clean package"
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv(SONARQUBE) {
+                    sh "${MAVEN_HOME}/bin/mvn sonar:sonar"
+                }
+            }
+        }
+
+        stage('Nexus Upload') {
+            steps {
+                sh "${MAVEN_HOME}/bin/mvn deploy -DaltDeploymentRepository=${NEXUS_REPO}::default::http://nexus.example.com/repository/maven-releases/"
+            }
+        }
+
+        stage('Docker Build & Push') {
+            steps {
+                script {
+                    docker.withRegistry('', DOCKER_CREDENTIALS) {
+                        def appImage = docker.build("myapp:${env.BUILD_NUMBER}")
+                        appImage.push()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withKubeConfig([credentialsId: KUBE_CONFIG]) {
+                    sh "kubectl apply -f k8s/deployment.yaml"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
+#more stages can be added as per requirement
+#ensure to have proper plugins installed in jenkins for maven sonar qube docker kubernetes
+#configure credentials and tools in jenkins global configuration
+#this jenkinsfile is a template and can be modified as per project needs
+#ensure to have proper error handling and notifications as per enterprise standards
+#this jenkinsfile assumes a maven based java project
+#adjust commands for other build tools or languages accordingly
+#ensure to have proper security measures in place for production readiness
+#consult devops best practices for enterprise level ci cd pipelines
+#end of jenkinsfile
+#ci cd jenkinsfile with maven build sonar qube nexus docker kubernetes helm chart terraform
+#jenkinsfile declarative pipeline syntax with 20 stages
+pipeline {
+    agent any
+
+    environment {
+        MAVEN_HOME = tool 'Maven 3.6.3'
+        SONARQUBE = 'SonarQubeServer'
+        NEXUS_REPO = 'NexusRepo'
+        DOCKER_CREDENTIALS = 'DockerHubCredentials'
+        KUBE_CONFIG = credentials('KubeConfigCredentials')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh "${MAVEN_HOME}/bin/mvn clean package"
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv(SONARQUBE) {
+                    sh "${MAVEN_HOME}/bin/mvn sonar:sonar"
+                }
+            }
+        }
+
+        stage('Nexus Upload') {
+            steps {
+                sh "${MAVEN_HOME}/bin/mvn deploy -DaltDeploymentRepository=${NEXUS_REPO}::default::http://nexus.example.com/repository/maven-releases/"
+            }
+        }
+
+        stage('Docker Build & Push') {
+            steps {
+                script {
+                    docker.withRegistry('', DOCKER_CREDENTIALS) {
+                        def appImage = docker.build("myapp:${env.BUILD_NUMBER}")
+                        appImage.push()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withKubeConfig([credentialsId: KUBE_CONFIG]) {
+                    sh "kubectl apply -f k8s/deployment.yaml"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}

@@ -1,0 +1,35 @@
+#readiness.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-pod
+spec:
+  automountServiceAccountToken: false
+  containers:
+  - name: readiness-container
+    image: my-image:1.0.0
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+        ephemeral-storage: 1Gi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+        ephemeral-storage: 2Gi
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+# Notes:
+# Readiness Probes
+# Purpose of Readiness Probes (determining if a container is ready to serve traffic)
+# Types of Readiness Probes (HTTP, TCP, Exec)
+# Readiness Probe configuration (initialDelaySeconds, periodSeconds, etc.)
+# Advanced Topics
+# Best practices for configuring Readiness Probes in production environments

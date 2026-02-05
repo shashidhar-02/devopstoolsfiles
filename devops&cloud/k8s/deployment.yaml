@@ -1,0 +1,49 @@
+#Kubernetes YAML (MOST CRITICAL)
+#Files you must master writing end-to-end:
+
+#Deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: my-container
+        image: my-image:1.0.0
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+            ephemeral-storage: "128Mi"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+            ephemeral-storage: "256Mi"
+      volumeConatinaers:
+      - name: my-conatainer
+        mountPath: /data
+      volumes:
+      - name: my-container
+        emptyDir: {}
+# Notes:
+# Deployment.yaml
+# Purpose of Deployments (managing stateless applications)
+# Key features (declarative updates, rolling updates, scaling)
+# Deployment configuration (replicas, selector, template)
+# Advanced Topics
+# Strategies for rolling updates and rollbacks
+
+
+

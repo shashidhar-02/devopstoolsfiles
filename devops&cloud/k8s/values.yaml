@@ -1,0 +1,43 @@
+#the image build shuould be upadated with latest tag number from values.yaml file without changing the template file
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: my-container
+        image: my-image:{{ .Values.image.tag }}
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+            ephemeral-storage: "128Mi"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+            ephemeral-storage: "256Mi"
+      volumeConatinaers:
+      - name: my-conatainer
+        mountPath: /data
+      volumes:
+      - name: my-container
+        emptyDir: {}
+# Notes:
+# Deployment.yaml
+# Purpose of Deployments (managing stateless applications)
+# Key features (declarative updates, rolling updates, scaling)
+# Deployment configuration (replicas, selector, template)
+# Advanced Topics
+# Strategies for rolling updates and rollbacks

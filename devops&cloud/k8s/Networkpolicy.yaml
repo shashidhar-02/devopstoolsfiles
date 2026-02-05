@@ -1,0 +1,48 @@
+apiVersion: NetworkingPolicy/v1
+kind: NetworkPolicy
+metadata:
+  name: my-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: my-app
+  policyTypes:
+  - Ingress
+  - Egress
+  - podSelector:
+    matchLabels:
+      app: my-app
+  - services:
+    - name: my-service
+      port: 80
+  - deployment:
+    - name: my-deployment
+  - statefulset:
+    - name: my-statefulset
+  - namespaceSelector:
+    matchLabels:
+      name: my-namespace
+  
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: my-app
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: my-app
+    ports:
+    - protocol: TCP
+      port: 80
+#notes:
+# NetworkPolicy.yaml
+# Purpose of Network Policies (controlling traffic flow at the IP address or port level)
+# Key components of a Network Policy (podSelector, policyTypes, ingress, egress)
+# Network Policy configuration (defining rules for ingress and egress traffic)
+# Advanced Topics
+# Using Network Policies with Calico, Cilium, or other CNI plugins

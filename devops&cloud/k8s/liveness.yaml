@@ -1,0 +1,34 @@
+# Liveness Probe Example
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-pod
+spec:
+  automountServiceAccountToken: false
+  containers:
+  - name: liveness-container
+    image: my-image:1.0.0
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+        ephemeral-storage: 1Gi
+      limits:
+        memory: 256Mi
+        cpu: 200m
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 80
+      initialDelaySeconds: 10
+      periodSeconds: 5
+    ports:
+    - containerPort: 80
+#notes:
+# Liveness Probes
+# Purpose of Liveness Probes (monitoring container health)
+# Types of Liveness Probes (HTTP, TCP, Exec)
+# Liveness Probe configuration (initialDelaySeconds, periodSeconds, etc.)
+# Advanced Topics
+# Best practices for configuring Liveness Probes in production environments
+

@@ -1,0 +1,7 @@
+--profile <name> #write comments for this aws  command 
+--output <style>
+--help 
+--endpoint-url <url>
+--region
+--version
+

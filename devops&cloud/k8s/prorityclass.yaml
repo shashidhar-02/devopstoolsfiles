@@ -1,0 +1,24 @@
+apiVersion: priorityclass.k8s.io/v1
+kind : priorityclass.k8s.io/v1
+metadata:
+  name: high-priority
+value: 1000
+globalDefault: false
+description: "This priority class is for high priority pods."
+resourcces:
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+  limits: 
+    cpu: "1" 
+    memory: "1Gi"
+  
+# Notes:
+# PriorityClass.yaml
+# Purpose of PriorityClasses
+# Defining priority values and their impact on scheduling
+# globalDefault and its implications  
+# Advanced Topics
+# Preemption and eviction based on priority
+# Best practices for setting priority classes in production environments
+

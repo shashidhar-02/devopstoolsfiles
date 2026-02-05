@@ -1,0 +1,29 @@
+#argo-application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-application
+spec:
+  project: default
+  source:
+    repoURL: ""
+    targetRevision: HEAD
+    path: "path/to/your/application"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+# Notes:
+# Argo-Application.yaml
+# Purpose of Argo CD Applications
+# Source and destination configuration
+# Sync policies (automated vs manual)
+# Advanced Topics
+# Using Argo CD with Helm and Kustomize
+# Managing application dependencies
+# Integrating Argo CD with CI/CD pipelines

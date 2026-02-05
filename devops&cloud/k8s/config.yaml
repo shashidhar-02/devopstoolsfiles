@@ -1,0 +1,32 @@
+#config yaml
+#Kubernetes cluster configuration file
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://my-k8s-cluster.example.com
+    certificate-authority-data: <base64-encoded-ca-cert>
+  name: my-cluster
+contexts:
+- context:
+    cluster: my-cluster
+    user: my-user
+  name: my-context
+current-context: my-context
+users:
+- name: my-user
+  user:
+    client-certificate-data: <base64-encoded-client-cert>
+    client-key-data: <base64-encoded-client-key>
+# Notes:
+# Config.yaml
+# Cluster connection details
+# User authentication methods (certificates, tokens, etc.)
+# Contexts for switching between clusters and users
+# Advanced Topics
+# Multiple clusters and user configurations
+# Using environment variables for sensitive data
+# Managing kubeconfig files with KUBECONFIG environment variable
+# Merging multiple kubeconfig files
+# Kustomize for managing different environments
+#👉 If you can’t write these blind → not senior

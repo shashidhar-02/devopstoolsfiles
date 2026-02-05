@@ -1,0 +1,16 @@
+#Service.yaml #nodeport #clusterpot #loadbalancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  selector:
+    app: my-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+# To change the service type, uncomment one of the following lines:
+#  type: NodePort
+#  type: LoadBalancer
