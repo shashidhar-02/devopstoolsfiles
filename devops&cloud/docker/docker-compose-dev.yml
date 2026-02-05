@@ -1,0 +1,186 @@
+version: '3.9'
+
+# Three-Tier Architecture - Development Environment
+# Frontend (React/Vue) → Backend (Java/Node) → Database (PostgreSQL)
+#
+# Services:
+# - frontend: Web UI (React/Nginx)
+# - backend: Java/Node.js API
+# - database: PostgreSQL
+#
+# Network: isolated development network
+# Ports: All exposed for development
+
+services:
+  # =========================================================================
+  # FRONTEND TIER - Web UI (React/Angular/Vue)
+  # =========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dev-frontend
+    image: devops-frontend:dev
+    
+    networks:
+      - dev-network
+    
+    ports:
+      - "3000:3000"  # React dev server
+    
+    environment:
+      NODE_ENV: development
+      REACT_APP_API_URL: http://localhost:8080
+      REACT_APP_DEBUG: "true"
+    
+    volumes:
+      # Live reload
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - /app/node_modules
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    restart_policy:
+      condition: on-failure
+      delay: 5s
+      max_attempts: 3
+    
+    depends_on:
+      - backend
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # BACKEND TIER - Application Server (Java Spring Boot)
+  # =========================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.java
+    container_name: dev-backend
+    image: devops-backend:dev
+    
+    networks:
+      - dev-network
+    
+    ports:
+      - "8080:8080"  # Java app
+      - "5005:5005"  # Debug port (for IDE debugging)
+    
+    environment:
+      # Spring Boot Configuration
+      SPRING_PROFILES_ACTIVE: development
+      SPRING_APPLICATION_NAME: backend-api
+      
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/devdb
+      SPRING_DATASOURCE_USERNAME: devuser
+      SPRING_DATASOURCE_PASSWORD: devpass
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      
+      # JPA/Hibernate
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      
+      # Server
+      SERVER_PORT: 8080
+      SERVER_SERVLET_CONTEXT_PATH: /api
+      
+      # Actuator (health/metrics)
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      
+      # Logging
+      LOGGING_LEVEL_ROOT: INFO
+      LOGGING_LEVEL_COM_EXAMPLE: DEBUG
+      
+      # Enable debug
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+    
+    volumes:
+      # Maven cache
+      - ~/.m2:/root/.m2:cached
+      # Logs
+      - ./backend/logs:/app/logs
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    restart_policy:
+      condition: on-failure
+      delay: 5s
+      max_attempts: 3
+    
+    depends_on:
+      database:
+        condition: service_healthy
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # DATABASE TIER - PostgreSQL
+  # =========================================================================
+  database:
+    image: postgres:15-alpine
+    container_name: dev-database
+    
+    networks:
+      - dev-network
+    
+    ports:
+      - "5432:5432"  # PostgreSQL port (exposed for dev)
+    
+    environment:
+      POSTGRES_DB: devdb
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    
+    volumes:
+      # Data persistence
+      - postgres-dev-data:/var/lib/postgresql/data
+      # Initialization scripts
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devuser"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    restart_policy:
+      condition: unless-stopped
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  dev-network:
+    driver: bridge
+
+volumes:
+  postgres-dev-data:
+    driver: local

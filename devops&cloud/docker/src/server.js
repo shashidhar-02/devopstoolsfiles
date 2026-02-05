@@ -4,8 +4,8 @@
 // - Request logging
 // - Error handling
 
-const http = require('http');
-const os = require('os');
+import { createServer } from 'http';
+import { hostname as _hostname } from 'os';
 
 // Configuration from environment
 const PORT = process.env.PORT || 3000;
@@ -86,7 +86,7 @@ function handleMetrics(req, res) {
         errors: metrics.errors,
         uptime: (Date.now() - metrics.uptime) / 1000,
         memory: process.memoryUsage(),
-        hostname: os.hostname(),
+        hostname: _hostname(),
         environment: NODE_ENV
     };
     
@@ -109,7 +109,7 @@ function handleHome(req, res) {
     <body>
         <h1>🚀 DevOps Application Running</h1>
         <p>Environment: ${NODE_ENV}</p>
-        <p>Hostname: ${os.hostname()}</p>
+        <p>Hostname: ${_hostname()}</p>
         
         <h2>Available Endpoints</h2>
         <ul>
@@ -136,7 +136,7 @@ function handle404(req, res) {
 }
 
 // Create server
-const server = http.createServer((req, res) => {
+const server = createServer((req, res) => {
     // Security headers
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -208,4 +208,4 @@ server.listen(PORT, HOST, () => {
     logger.info(`Node version: ${process.version}`);
 });
 
-module.exports = server;
+export default server;

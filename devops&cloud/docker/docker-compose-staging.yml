@@ -1,0 +1,304 @@
+version: '3.9'
+
+# Three-Tier Architecture - Staging Environment
+# Frontend (Nginx) → Backend (Java) → Database (PostgreSQL)
+#
+# Features:
+# - Load balancer for frontend
+# - Single backend instance (can scale)
+# - Database with backup configuration
+# - No debug ports
+# - Limited port exposure
+# - Monitoring enabled
+
+services:
+  # =========================================================================
+  # LOAD BALANCER - Reverse Proxy for Frontend
+  # =========================================================================
+  load-balancer:
+    image: nginx:alpine
+    container_name: staging-lb
+    
+    networks:
+      - staging-network
+    
+    ports:
+      - "80:80"   # HTTP
+      - "443:443" # HTTPS
+    
+    volumes:
+      # Nginx configuration
+      - ./docker/nginx-staging.conf:/etc/nginx/nginx.conf:ro
+      # SSL certificates
+      - ./certs/staging:/etc/nginx/certs:ro
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    restart_policy:
+      condition: on-failure
+      delay: 5s
+      max_attempts: 3
+    
+    depends_on:
+      - frontend
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # =========================================================================
+  # FRONTEND TIER - Web UI (React/Vue - Production Build)
+  # =========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: staging
+    container_name: staging-frontend
+    image: devops-frontend:staging
+    
+    networks:
+      - staging-network
+    
+    # No ports exposed (accessed via load balancer)
+    expose:
+      - "3000"
+    
+    environment:
+      NODE_ENV: staging
+      REACT_APP_API_URL: https://api.staging.example.com
+      REACT_APP_DEBUG: "false"
+      REACT_APP_ANALYTICS_ID: UA-XXXXXXX-1
+    
+    # No volumes in staging (immutable images)
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # BACKEND TIER - Application Server (Java)
+  # =========================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.java
+    container_name: staging-backend
+    image: devops-backend:staging
+    
+    networks:
+      - staging-network
+    
+    # No ports exposed (accessed via internal network)
+    expose:
+      - "8080"
+    
+    environment:
+      # Spring Boot
+      SPRING_PROFILES_ACTIVE: staging
+      SPRING_APPLICATION_NAME: backend-api-staging
+      
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/staging_db
+      SPRING_DATASOURCE_USERNAME: staging_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}  # From .env file
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
+      
+      # JPA
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate  # Don't auto-create schema
+      SPRING_JPA_SHOW_SQL: "false"  # No debug logging
+      
+      # Server
+      SERVER_PORT: 8080
+      SERVER_SERVLET_CONTEXT_PATH: /api
+      
+      # Actuator
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: when-authorized
+      
+      # Logging
+      LOGGING_LEVEL_ROOT: WARN
+      LOGGING_LEVEL_COM_EXAMPLE: INFO
+    
+    secrets:
+      - db_password
+      - api_key
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.75'
+          memory: 512M
+      replicas: 1  # Can scale to multiple instances
+    
+    depends_on:
+      database:
+        condition: service_healthy
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # =========================================================================
+  # DATABASE TIER - PostgreSQL with Backup
+  # =========================================================================
+  database:
+    image: postgres:15-alpine
+    container_name: staging-database
+    
+    networks:
+      - staging-network
+    
+    # No ports exposed (internal network only)
+    expose:
+      - "5432"
+    
+    environment:
+      POSTGRES_DB: staging_db
+      POSTGRES_USER: staging_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C --lc-collate=C --lc-ctype=C"
+    
+    secrets:
+      - db_password
+    
+    volumes:
+      # Data persistence
+      - postgres-staging-data:/var/lib/postgresql/data
+      # Initialization scripts
+      - ./docker/init-db-staging.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Backup scripts
+      - ./docker/backup:/backup:ro
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staging_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    
+    restart_policy:
+      condition: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.75'
+          memory: 512M
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # =========================================================================
+  # BACKUP SERVICE - Automated database backups
+  # =========================================================================
+  backup:
+    image: postgres:15-alpine
+    container_name: staging-backup
+    
+    networks:
+      - staging-network
+    
+    environment:
+      PGHOST: database
+      PGPORT: "5432"
+      PGUSER: staging_user
+      PGPASSWORD_FILE: /run/secrets/db_password
+      PGDATABASE: staging_db
+      BACKUP_PATH: /backups
+    
+    secrets:
+      - db_password
+    
+    volumes:
+      - postgres-staging-backups:/backups
+      - ./docker/backup-script.sh:/backup-script.sh:ro
+    
+    command: /bin/sh -c "while true; do /backup-script.sh; sleep 86400; done"
+    
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+    
+    depends_on:
+      database:
+        condition: service_healthy
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+networks:
+  staging-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  postgres-staging-data:
+    driver: local
+  postgres-staging-backups:
+    driver: local
+
+secrets:
+  db_password:
+    file: ./secrets/staging_db_password.txt
+  api_key:
+    file: ./secrets/staging_api_key.txt

@@ -8,13 +8,17 @@ This module contains production-ready Docker configurations demonstrating:
 
 | File | Purpose | Key Concepts |
 |------|---------|--------------|
-| **Dockerfile** | Multi-stage build with security hardening | Build optimization, non-root users, security |
-| **docker-compose.yml** | Orchestrate multiple services locally | Networking, health checks, secrets, volumes |
-| **.dockerignore** | Exclude unnecessary files from build context | Build cache, layer optimization |
-| **entrypoint.sh** | Container initialization script | Signal handling, secrets injection, validation |
+| **Dockerfile** | Node.js multi-stage build | JavaScript/Node.js optimization, Alpine, security |
+| **Dockerfile.java** | Java multi-stage build | Maven build caching, JRE optimization, debugging |
+| **docker-compose.yml** | Single dev environment | All-in-one local development setup |
+| **docker-compose-dev.yml** | Three-tier development | Frontend + Backend + Database with live reload |
+| **docker-compose-staging.yml** | Three-tier staging | Load balancer, backup service, resource limits |
+| **docker-compose-prod.yml** | Three-tier production | HA setup, clustering, replication, monitoring |
+| **.dockerignore** | Exclude unnecessary files | Build cache, layer optimization |
+| **entrypoint.sh** | Container initialization | Signal handling, secrets injection, validation |
 | **healthcheck.sh** | Health verification | Container liveness, readiness checks |
 | **init-db.sql** | Database initialization | Schema, permissions, initial data |
-| **src/server.js** | Sample application | HTTP server, metrics, graceful shutdown |
+| **src/server.js** | Sample Node.js app | HTTP server, metrics, graceful shutdown |
 
 ## Docker Best Practices Demonstrated
 
@@ -380,6 +384,265 @@ ENTRYPOINT ["/usr/sbin/dumb-init", "--"]
 CMD ["node", "/app/src/server.js"]
 ```
 
+---
+
+## Dockerfile Comparison
+
+### Node.js vs Java Applications
+
+| Aspect | Node.js (Dockerfile) | Java (Dockerfile.java) |
+|--------|-----------------|---------------------|
+| **Build Tool** | npm | Maven (build cache) |
+| **Base Images** | node:18-alpine | maven:3.9-alpine → eclipse-temurin:17-jre-alpine |
+| **Build Time** | ~30 seconds | ~2-3 minutes (Maven) |
+| **Final Size** | ~150 MB | ~250 MB |
+| **Runtime** | Node.js script | Java JVM process |
+| **Debug Port** | None by default | 5005 (JDWP) available |
+| **Dependencies** | npm modules | Maven JAR files |
+| **Health Check** | HTTP endpoint | Spring Boot Actuator |
+
+### Node.js Dockerfile (Dockerfile)
+
+```dockerfile
+# Multi-stage: Builder → Runtime
+FROM node:18-alpine as builder
+# npm ci install only production dependencies
+
+FROM node:18-alpine
+# Non-root user, health checks
+# ~150 MB final image
+
+# Usage:
+docker build -t frontend:latest .
+docker run -p 3000:3000 frontend:latest
+```
+
+### Java Dockerfile (Dockerfile.java)
+
+```dockerfile
+# Multi-stage: Maven Builder → JRE Runtime → Debug Stage
+FROM maven:3.9-eclipse-temurin-17-alpine as builder
+# mvn dependency:go-offline (cache)
+# mvn clean package
+
+FROM eclipse-temurin:17-jre-alpine
+# SPRING_PROFILES_ACTIVE, JAVA_OPTS
+# Health checks for Spring Boot Actuator
+# ~250 MB final image
+
+# Usage:
+docker build -f Dockerfile.java -t backend:latest .
+docker run -p 8080:8080 -p 5005:5005 backend:latest
+
+# Debug with IDE
+# In IntelliJ/VSCode: Debug → Remote Application → localhost:5005
+```
+
+### Key Differences
+
+**Node.js Advantages:**
+- Faster build time (~30s)
+- Smaller image size (~150 MB)
+- Simple dependency management
+- Ideal for microservices
+
+**Java Advantages:**
+- Built-in dependency isolation (JAR files)
+- Type safety at compile time
+- Spring Boot Actuator for production health checks
+- Better for enterprise applications
+- Debug support (JDWP) built-in
+
+### Example Deployments
+
+**Frontend (Node.js)**:
+```bash
+# Single container, stateless
+docker run -d \
+  -p 3000:3000 \
+  -e REACT_APP_API_URL=https://api.example.com \
+  frontend:latest
+```
+
+**Backend (Java)**:
+```bash
+# Connect to database and cache
+docker run -d \
+  -p 8080:8080 \
+  -p 5005:5005 \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/app \
+  -e SPRING_REDIS_HOST=redis \
+  -e SPRING_PROFILES_ACTIVE=production \
+  backend:latest
+```
+
+## Three-Tier Architecture
+
+Three separate docker-compose files for different environments, demonstrating scalability:
+
+### Architecture Overview
+
+```
+         ┌─────────────────────────────────┐
+         │     PRESENTATION LAYER          │
+         │  Frontend (React/Vue/Angular)   │
+         │  - Web UI, Static Assets        │
+         └─────────────────────────────────┘
+                        ↓
+         ┌─────────────────────────────────┐
+         │    APPLICATION LAYER            │
+         │  Backend (Java Spring Boot)     │
+         │  - Business Logic, APIs         │
+         │  - Cache (Redis)                │
+         └─────────────────────────────────┘
+                        ↓
+         ┌─────────────────────────────────┐
+         │     DATA LAYER                  │
+         │  Database (PostgreSQL)          │
+         │  - Persistent Storage           │
+         │  - Replication (Production)     │
+         └─────────────────────────────────┘
+```
+
+### docker-compose-dev.yml - Development
+
+**Setup:** Frontend (React dev) → Backend (Java debug) → Database
+
+**Features:**
+
+- Live reload for frontend (volume mounts)
+- Debug port for Java (5005)
+- No port restrictions (all exposed)
+- Database exposed for CLI access
+- Maven cache shared
+
+**Usage:**
+
+```bash
+docker-compose -f docker-compose-dev.yml up -d
+
+# View logs
+docker-compose -f docker-compose-dev.yml logs -f backend
+
+# Access services
+curl http://localhost:3000        # Frontend
+curl http://localhost:8080/api    # Backend
+psql -h localhost -U devuser      # Database
+```
+
+**Services:**
+
+- `frontend` - React (port 3000) with live reload
+- `backend` - Java Spring Boot (port 8080 + debug 5005)
+- `database` - PostgreSQL (port 5432)
+
+### docker-compose-staging.yml - Staging
+
+**Setup:** Nginx LB → Frontend (2 replicas) → Backend (1) → Database + Backup
+
+**Features:**
+
+- Load balancer (Nginx) for high availability
+- Production builds (no debug, optimized)
+- Health checks enforced
+- Backup service (automated daily)
+- Resource limits enforced
+- Secrets management
+- No exposed database port
+- Logging to file
+
+**Usage:**
+
+```bash
+# Copy example file and fill in secrets
+cp .env.example .env.staging
+cp secrets/db_password.txt.example secrets/db_password.txt
+
+# Start services
+docker-compose -f docker-compose-staging.yml up -d
+
+# View status
+docker-compose -f docker-compose-staging.yml ps
+
+# Check health
+curl -k https://localhost/health
+
+# Scale backend
+docker-compose -f docker-compose-staging.yml up -d --scale backend=2
+```
+
+**Services:**
+
+- `load-balancer` - Nginx reverse proxy (port 80/443)
+- `frontend` - Production React (2 replicas behind LB)
+- `backend` - Java API
+- `database` - PostgreSQL
+- `backup` - Automated backup service
+
+### docker-compose-prod.yml - Production
+
+**Setup:** Nginx LB → Frontend (2) → Backend cluster (3) → PostgreSQL (Master + Replica) + Redis + Monitoring
+
+**Features:**
+
+- High availability (multiple replicas)
+- Load balancing for all tiers
+- PostgreSQL Master-Replica replication
+- Redis caching layer
+- Prometheus + Grafana monitoring
+- AWS CloudWatch logging
+- Resource limits strictly enforced
+- No exposed service ports
+- Automated backups + replication
+- JWT authentication
+- CORS and security hardening
+
+**Usage:**
+
+```bash
+# Set up secrets from AWS Secrets Manager or secure vault
+export SENTRY_DSN=$(aws secretsmanager get-secret-value --secret-id sentry-dsn --query 'SecretString' --output text)
+export ANALYTICS_ID=$(aws secretsmanager get-secret-value --secret-id analytics-id --query 'SecretString' --output text)
+
+# Start production stack
+docker-compose -f docker-compose-prod.yml up -d
+
+# Monitor with Grafana
+curl http://localhost:3001  # Grafana dashboard
+
+# View metrics
+curl http://localhost:9090  # Prometheus
+
+# Check service health
+docker-compose -f docker-compose-prod.yml ps
+
+# View logs (streaming)
+docker-compose -f docker-compose-prod.yml logs -f backend-1 backend-2 backend-3
+```
+
+**Services:**
+
+- `load-balancer` - Nginx with SSL (port 80/443)
+- `frontend` - Production React (2 replicas)
+- `backend-1/2/3` - Java API cluster (3 instances)
+- `redis` - Session & data caching
+- `database-master` - PostgreSQL writer
+- `database-replica` - PostgreSQL read replica
+- `prometheus` - Metrics collection
+- `grafana` - Monitoring dashboards
+
+**Cluster Architecture:**
+
+```
+┌─ Master (write)
+└─ Replica (read) for load distribution
+
+Backend instances:
+├─ backend-1 (1.5 CPU, 1.5 GB)
+├─ backend-2 (1.5 CPU, 1.5 GB)
+└─ backend-3 (1.5 CPU, 1.5 GB)
+```
+
 ## Usage Examples
 
 ### Building Images
@@ -387,8 +650,11 @@ CMD ["node", "/app/src/server.js"]
 **Standard build**:
 
 ```bash
-# Build single image
+# Build Node.js image
 docker build -t myapp:1.0.0 .
+
+# Build Java image
+docker build -f Dockerfile.java -t myapp-java:1.0.0 .
 
 # Build with build arguments
 docker build \
@@ -398,6 +664,31 @@ docker build \
 
 # Build specific stage (debug)
 docker build --target debug -t myapp:debug .
+```
+
+**Java-Specific Build**:
+
+```bash
+# Build Java image with fast rebuild (cached dependencies)
+docker build \
+  -f Dockerfile.java \
+  -t backend-api:1.0.0 .
+
+# View Maven build layers and cache efficiency
+docker history backend-api:1.0.0
+
+# Build debug stage for IDE debugging
+docker build \
+  -f Dockerfile.java \
+  --target debug \
+  -t backend-api:debug .
+
+# Run Java app locally
+docker run \
+  -p 8080:8080 \
+  -p 5005:5005 \
+  -e SPRING_PROFILES_ACTIVE=development \
+  backend-api:debug
 ```
 
 **BuildKit with caching**:
@@ -450,17 +741,28 @@ docker run \
 **Start services**:
 
 ```bash
-# Start in background
+# Basic development (all-in-one)
 docker-compose up -d
 
 # Start with environment file
 docker-compose --env-file .env.production up -d
 
-# Scale service
-docker-compose up -d --scale app=3
+# Three-tier architecture options
+# Development environment (live reload, debugging)
+docker-compose -f docker-compose-dev.yml up -d
+
+# Staging environment (load balancer, backups)
+docker-compose -f docker-compose-staging.yml up -d
+
+# Production environment (HA, replication, monitoring)
+docker-compose -f docker-compose-prod.yml up -d
+
+# Scale service (production)
+docker-compose -f docker-compose-prod.yml up -d --scale backend=5
 
 # View logs
 docker-compose logs -f app
+docker-compose -f docker-compose-prod.yml logs -f backend-1 backend-2 backend-3
 
 # Health status
 docker-compose ps
@@ -470,17 +772,41 @@ docker-compose ps
 # devops-redis        Up 1 minute
 ```
 
+**Development Workflow**:
+
+```bash
+# Start dev environment with live code reload
+docker-compose -f docker-compose-dev.yml up -d
+
+# View logs in real-time
+docker-compose -f docker-compose-dev.yml logs -f backend
+
+# Attach Java debugger to IDE (port 5005)
+# In IDE: Run → Debug → Remote Application → localhost:5005
+
+# Make code changes (automatically reloaded for React)
+vi src/main/java/com/example/App.java
+
+# Rebuild Java application
+docker-compose -f docker-compose-dev.yml down
+docker-compose -f docker-compose-dev.yml up -d
+```
+
 **Stop and cleanup**:
 
 ```bash
 # Stop containers
 docker-compose down
+docker-compose -f docker-compose-dev.yml down
 
 # Remove volumes
 docker-compose down -v
 
 # Remove images
 docker-compose down --rmi all
+
+# Clean up all containers from three-tier stack
+docker-compose -f docker-compose-prod.yml down -v
 ```
 
 ### Secrets Management
@@ -497,6 +823,38 @@ echo "my-api-key-xyz" > secrets/api_key.txt
 docker-compose up
 ```
 
+**Staging secrets**:
+
+```bash
+# Copy example and fill in values
+cp .env.example .env.staging
+cp secrets/db_password.txt.example secrets/staging_db_password.txt
+
+# Generate strong passphrase
+openssl rand -base64 32 > secrets/staging_db_password.txt
+
+# Start with secrets
+docker-compose -f docker-compose-staging.yml up -d
+```
+
+**Production secrets (from AWS/Azure)**:
+
+```bash
+# Load secrets from AWS Secrets Manager
+export DB_PASSWORD=$(aws secretsmanager get-secret-value \
+  --secret-id prod/db/password \
+  --query SecretString \
+  --output text)
+
+export JWT_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id prod/jwt/secret \
+  --query SecretString \
+  --output text)
+
+# Start production stack
+docker-compose -f docker-compose-prod.yml up -d
+```
+
 **Docker Swarm secrets (production)**:
 
 ```bash
@@ -508,6 +866,64 @@ secrets:
   db_password:
     external: true
 ```
+
+### Connecting to Services
+
+**Frontend (React)**:
+```bash
+# Development
+curl http://localhost:3000
+
+# Staging
+curl -k https://localhost
+
+# Production
+curl https://api.example.com
+```
+
+**Backend API**:
+```bash
+# Development
+curl http://localhost:8080/api/health
+
+# Staging  
+curl http://localhost:8080/api/actuator/health
+
+# Production (behind LB)
+curl https://api.example.com/api/actuator/health
+```
+
+**Database CLI**:
+```bash
+# Development
+docker-compose -f docker-compose-dev.yml exec database psql -U devuser -d devdb
+
+# View logs
+docker-compose -f docker-compose-dev.yml logs database
+```
+
+**Redis Cache**:
+```bash
+# Connect to Redis in staging/prod
+docker-compose -f docker-compose-staging.yml exec redis redis-cli
+redis-cli> PING
+redis-cli> KEYS *
+redis-cli> GET session:abc123
+```
+
+**Monitoring (Production)**:
+```bash
+# Prometheus metrics
+curl http://localhost:9090
+
+# Grafana dashboards
+curl http://localhost:3001
+
+# Backend metrics endpoint
+curl http://localhost:8080/actuator/prometheus
+```
+
+
 
 **Kubernetes secrets (production)**:
 

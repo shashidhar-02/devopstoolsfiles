@@ -23,8 +23,7 @@ services:
         VERSION: "${VERSION:-1.0.0}"
       # Cache management
       cache_from:
-        - type: registry
-          ref: myregistry.azurecr.io/app:latest
+        - myregistry.azurecr.io/app:latest
     
     # Container name for easy reference
     container_name: devops-app
