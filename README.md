@@ -1,60 +1,38 @@
-# Portfolio — Interactive & Responsive
+# DevOps Tools & Configuration Files
 
-This is an interactive portfolio with animated particle background and modern JavaScript features.
+A comprehensive collection of DevOps tools, scripts, and configuration files for cloud infrastructure, CI/CD pipelines, Kubernetes, and Terraform.
 
-## Files included:
+## Contents
 
-- `index.html` — main page with About, Education, Skills, Experience, Projects, Contact
-- `styles.css` — responsive styling with animations
+### 📁 devops&cloud/
+Complete DevOps configuration files and scripts including:
 
-## How to view locally
+- **Bash Scripts** - System monitoring, deployment, health checks, and automation scripts
+- **CI/CD** - Jenkins, GitHub Actions, GitLab CI, Argo CD configurations
+- **Kubernetes** - Manifests for deployments, services, ingress, HPA, network policies, and more
+- **Terraform** - Production-ready infrastructure as code with modules for AWS resources (VPC, EC2, RDS, S3, ALB, ASG, IAM)
 
-1. Open `c:\Users\s9409\Downloads\ganeshportfolio\index.html` in your browser.
+### 🔧 Key Features
 
-## Features
+- **Terraform Modules**: Reusable modules for AWS infrastructure
+- **K8s Best Practices**: Complete set of Kubernetes resources with security and scaling configurations
+- **Automation Scripts**: Shell scripts for monitoring, deployment, and maintenance
+- **CI/CD Pipelines**: Ready-to-use pipeline configurations for multiple platforms
 
-✨ **Interactive Elements:**
-- Animated particle background with connecting lines
-- Smooth scroll navigation
-- Typing animation for tagline
-- 3D card parallax on mouse hover
-- Fade-in animations on scroll
-- Active navigation highlighting
+## Structure
 
-📱 **Responsive Design:**
-- Mobile-optimized layout
-- Touch-friendly interactions
-- Adaptive particle count based on screen size
+```
+devops&cloud/
+├── bash/              # Shell scripts for various DevOps tasks
+├── ci,cd/             # CI/CD pipeline configurations
+├── k8s/               # Kubernetes manifests
+└── terrafrom/         # Terraform infrastructure code
+    ├── modules/       # Reusable Terraform modules
+    ├── environments/  # Environment-specific configurations
+    ├── policies/      # OPA and Sentinel policies
+    └── scripts/       # Helper scripts
+```
 
-## How to Add Your Background Image
+## Usage
 
-To add your background image from Google Photos or any other source:
-
-1. **Download the image** from your Google Photos link
-2. **Save it** in the portfolio folder as `background.jpg` (or any name)
-3. **Open `styles.css`** and find line 28
-4. **Uncomment and update** the background-image line:
-   ```css
-   background-image: url('background.jpg');
-   ```
-5. **Refresh** your browser to see the background image
-
-The image will automatically scale to fit the screen with particles overlaid on top.
-
-## Contact Links Updated
-
-- ✅ LinkedIn: https://www.linkedin.com/in/chelukala-ganga-reddy-278b23295
-- ✅ GitHub: https://github.com/GaneshReddy1801
-- ✅ LeetCode: https://leetcode.com/u/Ch_Ganga_Reddy/
-
-## Next Steps
-
-- Add your email address in the Contact section
-- Upload and link your resume PDF
-- Download your background image from Google Photos and add it as described above
-- Update Experience and Projects sections with your actual work
-
-## Deploy to Web
-
-Deploy to Vercel, Netlify, or GitHub Pages for a live site.
-
+Refer to individual directories for specific documentation and usage instructions.
