@@ -1,0 +1,22 @@
+#kustomization in k8s/kustomize.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - taints-tolerations.yaml
+  - prorityclass.yaml
+  - Networkpolicy.yaml  
+  
+# Notes:
+# Kustomization.yaml
+# Purpose of Kustomize (customizing Kubernetes YAML configurations)
+# Managing multiple environments (dev, staging, prod)
+# Overlays and bases
+# Patching resources
+# Advanced Topics
+# Using Kustomize with CI/CD pipelines
+# Generating resources (ConfigMaps, Secrets) with Kustomize
+# Integrating Kustomize with Helm charts
+  

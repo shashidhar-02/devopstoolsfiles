@@ -1,0 +1,18 @@
+---
+# host_vars/db01.example.com.yml
+# Master database server
+
+# This is the primary database
+is_master: true
+replication_enabled: true
+
+# Higher resource allocation for master
+mysql_innodb_buffer_pool_size: "4G"
+mysql_max_connections: 500
+
+# Backup configuration for master
+db_backup_enabled: true
+db_binary_log_enabled: true
+
+# Specific network
+ip_address: 10.0.2.10

@@ -1,0 +1,99 @@
+---
+# roles/common/tasks/main.yml
+# Common tasks for all servers - demonstrates idempotency
+
+- name: Update apt cache (idempotent - uses cache_valid_time)
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+  tags: packages
+
+- name: Install common packages (idempotent)
+  apt:
+    name: "{{ common_packages }}"
+    state: present
+  when: ansible_os_family == "Debian"
+  register: package_install
+  until: package_install is succeeded
+  retries: "{{ max_retries }}"
+  delay: "{{ retry_delay }}"
+  tags: packages
+
+- name: Create ansible user (idempotent)
+  user:
+    name: ansible
+    shell: /bin/bash
+    create_home: yes
+    state: present
+  tags: users
+
+- name: Configure NTP (conditional execution)
+  block:
+    - name: Install NTP package
+      apt:
+        name: ntp
+        state: present
+      
+    - name: Configure NTP servers
+      template:
+        src: ntp.conf.j2
+        dest: /etc/ntp.conf
+        mode: '0644'
+      notify: restart ntp
+      
+  when: ntp_enabled | bool
+  tags: ntp
+
+- name: Configure firewall (idempotent with ufw)
+  ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+  when: firewall_enabled | bool
+  tags: security
+
+- name: Allow SSH through firewall
+  ufw:
+    rule: allow
+    port: '22'
+    proto: tcp
+  when: firewall_enabled | bool
+  tags: security
+
+- name: Configure log rotation (idempotent)
+  template:
+    src: logrotate.conf.j2
+    dest: /etc/logrotate.d/custom
+    mode: '0644'
+  tags: logging
+
+- name: Ensure required directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /var/log/application
+    - /opt/scripts
+    - /backup
+  tags: filesystem
+
+# Error recovery example
+- name: Download monitoring agent (with error recovery)
+  get_url:
+    url: "https://example.com/{{ monitoring_agent }}"
+    dest: "/tmp/{{ monitoring_agent }}"
+    mode: '0755'
+  register: download_result
+  until: download_result is succeeded
+  retries: 5
+  delay: 10
+  ignore_errors: yes
+  tags: monitoring
+
+- name: Install monitoring agent (conditional on successful download)
+  command: "/tmp/{{ monitoring_agent }} --install"
+  when: download_result is succeeded
+  notify: restart monitoring
+  tags: monitoring

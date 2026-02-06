@@ -1,0 +1,34 @@
+app:
+  title: DevOps Platform Portal
+  baseUrl: http://localhost:3000
+
+backend:
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+  database:
+    client: sqlite3
+    connection: ":memory:"
+
+catalog:
+  locations:
+    - type: file
+      target: ./catalog-info.yaml
+
+auth:
+  environment: development
+  providers:
+    guest:
+      userEntityRef: user:default/guest
+
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+
+techdocs:
+  builder: local
+  generator:
+    runIn: local
+  publisher:
+    type: local

@@ -1,0 +1,508 @@
+version: '3.9'
+
+# Three-Tier Architecture - Production Environment
+# Frontend (Nginx CDN) → Backend (Java Cluster) → Database (PostgreSQL + Replication)
+#
+# Features:
+# - High availability setup
+# - Multiple backend replicas with load balancing
+# - PostgreSQL with replication
+# - Separate monitoring stack
+# - No exposed ports (API gateway handles external traffic)
+# - Full encryption and security hardening
+# - Resource limits enforced
+# - Centralized logging
+
+services:
+  # =========================================================================
+  # LOAD BALANCER - Production-Grade Reverse Proxy
+  # =========================================================================
+  load-balancer:
+    image: nginx:alpine
+    container_name: prod-lb
+    
+    networks:
+      - prod-network
+    
+    ports:
+      - "80:80"   # HTTP (redirects to HTTPS)
+      - "443:443" # HTTPS
+    
+    volumes:
+      # Production nginx configuration
+      - ./docker/nginx-prod.conf:/etc/nginx/nginx.conf:ro
+      # SSL certificate (from CI/CD secret management)
+      - ./certs/prod:/etc/nginx/certs:ro
+      # Nginx cache
+      - nginx-prod-cache:/var/cache/nginx
+    
+    environment:
+      TLS_CERT: /etc/nginx/certs/server.crt
+      TLS_KEY: /etc/nginx/certs/server.key
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    
+    depends_on:
+      - frontend
+      - backend-1
+      - backend-2
+      - backend-3
+    
+    logging:
+      driver: awslogs  # CloudWatch logs
+      options:
+        awslogs-group: /ecs/prod-lb
+        awslogs-region: us-east-1
+        awslogs-stream-prefix: nginx
+
+  # =========================================================================
+  # FRONTEND TIER - Static Web UI with Caching
+  # =========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+        REACT_APP_ENV: production
+    image: devops-frontend:prod
+    
+    networks:
+      - prod-network
+    
+    expose:
+      - "3000"
+    
+    environment:
+      NODE_ENV: production
+      REACT_APP_API_URL: https://api.example.com
+      REACT_APP_DEBUG: "false"
+      REACT_APP_SENTRY_DSN: ${SENTRY_DSN}
+      REACT_APP_ANALYTICS_ID: ${ANALYTICS_ID}
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.75'
+          memory: 256M
+      replicas: 2  # Multiple frontend instances
+    
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/prod-frontend
+        awslogs-region: us-east-1
+        awslogs-stream-prefix: react
+
+  # =========================================================================
+  # BACKEND TIER - Java Application Cluster (3 instances)
+  # =========================================================================
+  backend-1:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.java
+    image: devops-backend:prod
+    container_name: prod-backend-1
+    
+    networks:
+      - prod-network
+    
+    expose:
+      - "8080"
+    
+    environment: &backend-env
+      SPRING_PROFILES_ACTIVE: production
+      SPRING_APPLICATION_NAME: backend-api-prod
+      SPRING_CLOUD_CONFIG_ENABLED: "true"
+      SPRING_CLOUD_CONFIG_SERVER_GIT_URI: https://git.internal/config-repo
+      
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database-master:5432/prod_db
+      SPRING_DATASOURCE_USERNAME: prod_user
+      SPRING_DATASOURCE_PASSWORD_FILE: /run/secrets/db_password
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "10"
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: "10000"
+      
+      # JPA/Hibernte
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_JPA_SHOW_SQL: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_BATCH_SIZE: "20"
+      SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_INSERTS: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_ORDER_UPDATES: "true"
+      
+      # Server
+      SERVER_PORT: 8080
+      SERVER_SERVLET_CONTEXT_PATH: /api
+      SERVER_COMPRESSION_ENABLED: "true"
+      
+      # Actuator & Security
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,info,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: when-authorized
+      MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP: "true"
+      
+      # Logging
+      LOGGING_LEVEL_ROOT: WARN
+      LOGGING_LEVEL_COM_EXAMPLE: INFO
+      
+      # Security & Auth
+      SECURITY_JWT_ENABLED: "true"
+      SECURITY_JWT_SECRET_FILE: /run/secrets/jwt_secret
+      SECURITY_OAUTH2_ENABLED: "true"
+      
+      # Cache
+      SPRING_CACHE_TYPE: redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: "6379"
+    
+    secrets:
+      - db_password
+      - api_key
+      - jwt_secret
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "Authorization: Bearer ${HEALTH_CHECK_TOKEN}", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    
+    restart_policy:
+      condition: on-failure
+      delay: 15s
+      max_attempts: 5
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.5'
+          memory: 1.5G
+    
+    depends_on:
+      database-master:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/prod-backend
+        awslogs-region: us-east-1
+        awslogs-stream-prefix: java-${HOSTNAME}
+
+  backend-2:
+    extends: backend-1
+    container_name: prod-backend-2
+
+  backend-3:
+    extends: backend-1
+    container_name: prod-backend-3
+
+  # =========================================================================
+  # CACHE - Redis for Session & Data Caching
+  # =========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: prod-redis
+    
+    networks:
+      - prod-network
+    
+    expose:
+      - "6379"
+    
+    command:
+      - redis-server
+      - "--requirepass"
+      - "${REDIS_PASSWORD}"
+      - "--maxmemory"
+      - "1gb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--appendonly"
+      - "yes"
+      - "--appendfsync"
+      - "everysec"
+    
+    volumes:
+      - redis-prod-data:/data
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    restart_policy:
+      condition: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 1.5G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/prod-redis
+        awslogs-region: us-east-1
+
+  # =========================================================================
+  # DATABASE TIER - PostgreSQL Master + Replica Architecture
+  # =========================================================================
+  database-master:
+    image: postgres:15-alpine
+    container_name: prod-database-master
+    
+    networks:
+      - prod-network
+    
+    expose:
+      - "5432"
+    
+    environment:
+      POSTGRES_DB: prod_db
+      POSTGRES_USER: prod_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      POSTGRES_HOST_AUTH_METHOD: "md5"
+    
+    secrets:
+      - db_password
+    
+    volumes:
+      - postgres-prod-data-master:/var/lib/postgresql/data
+      - ./docker/init-db-prod.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/postgresql-replication.conf:/etc/postgresql/postgresql.conf:ro
+    
+    command:
+      - "postgres"
+      - "-c"
+      - "config_file=/etc/postgresql/postgresql.conf"
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prod_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    
+    restart_policy:
+      condition: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.5'
+          memory: 2G
+    
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/prod-database
+        awslogs-region: us-east-1
+        awslogs-stream-prefix: postgres-master
+
+  # PostgreSQL Read Replica
+  database-replica:
+    image: postgres:15-alpine
+    container_name: prod-database-replica
+    
+    networks:
+      - prod-network
+    
+    expose:
+      - "5432"
+    
+    environment:
+      PGUSER: replication_user
+      PGPASSWORD_FILE: /run/secrets/replication_password
+    
+    secrets:
+      - replication_password
+    
+    volumes:
+      - postgres-prod-data-replica:/var/lib/postgresql/data
+    
+    command:
+      - bash
+      - -c
+      - |
+        pg_basebackup -h database-master -D /var/lib/postgresql/data -U replication_user -v -P -W &&
+        echo "standby_mode = 'on'" >> /var/lib/postgresql/recovery.conf &&
+        postgres
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    restart_policy:
+      condition: unless-stopped
+    
+    depends_on:
+      database-master:
+        condition: service_healthy
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 3G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/prod-database
+        awslogs-region: us-east-1
+        awslogs-stream-prefix: postgres-replica
+
+  # =========================================================================
+  # MONITORING - Prometheus + Grafana
+  # =========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prod-prometheus
+    
+    networks:
+      - prod-network
+    
+    expose:
+      - "9090"
+    
+    volumes:
+      - ./docker/prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-prod-data:/prometheus
+    
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+    
+    restart_policy:
+      condition: unless-stopped
+    
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/prod-monitoring
+        awslogs-region: us-east-1
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: prod-grafana
+    
+    networks:
+      - prod-network
+    
+    expose:
+      - "3001"
+    
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    
+    volumes:
+      - grafana-prod-data:/var/lib/grafana
+      - ./docker/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+    
+    depends_on:
+      - prometheus
+    
+    restart_policy:
+      condition: unless-stopped
+    
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/prod-monitoring
+        awslogs-region: us-east-1
+
+networks:
+  prod-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+volumes:
+  postgres-prod-data-master:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/postgres/master
+  postgres-prod-data-replica:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/postgres/replica
+  redis-prod-data:
+    driver: local
+  nginx-prod-cache:
+    driver: local
+  prometheus-prod-data:
+    driver: local
+  grafana-prod-data:
+    driver: local
+
+secrets:
+  db_password:
+    file: /run/secrets/prod_db_password.txt
+  replication_password:
+    file: /run/secrets/prod_replication_password.txt
+  api_key:
+    file: /run/secrets/prod_api_key.txt
+  jwt_secret:
+    file: /run/secrets/prod_jwt_secret.txt

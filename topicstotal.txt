@@ -1,0 +1,401 @@
+.
+
+🔟 TOP 10 MOST-WRITTEN FILE TYPES (PRODUCTION)
+1️⃣ Kubernetes YAML (MOST CRITICAL)
+
+Files you must master writing end-to-end:
+
+Core
+
+Deployment.yaml
+
+Service.yaml
+
+Ingress.yaml
+
+ConfigMap.yaml
+
+Secret.yaml
+
+Namespace.yaml
+
+Advanced / Senior
+
+StatefulSet.yaml
+
+DaemonSet.yaml
+
+HPA.yaml
+
+PDB.yaml
+
+NetworkPolicy.yaml
+
+RBAC (Role, ClusterRole, Binding)
+
+PriorityClass.yaml
+
+Must-know Topics
+
+Resource requests & limits
+
+Liveness / readiness / startup probes
+
+Rolling update strategies
+
+Affinity / anti-affinity
+
+Taints & tolerations
+
+SecurityContext (non-root, fsGroup)
+
+Multi-env overlays (dev/stage/prod)
+
+Helm templating logic
+
+Kustomize patches
+
+👉 If you can’t write these blind → not senior
+
+2️⃣ CI/CD YAML (PIPELINE FILES)
+Files
+
+.github/workflows/*.yml
+
+.gitlab-ci.yml
+
+Jenkinsfile
+
+argo-application.yaml
+
+argo-rollout.yaml
+
+Must-know Topics
+
+Stages vs jobs vs steps
+
+Pipeline triggers (push, PR, tags)
+
+Environment-based pipelines
+
+Secrets injection
+
+Caching & artifacts
+
+Matrix builds
+
+Conditional jobs
+
+Rollback logic
+
+Promotion workflows
+
+GitOps sync & drift detection
+
+DevSecOps additions
+
+SAST scanning stage
+
+Dependency scanning
+
+Container image scanning
+
+IaC scanning
+
+Policy gates (fail build)
+
+3️⃣ Terraform (IaC – CLOUD BACKBONE)
+Files
+
+main.tf
+
+variables.tf
+
+outputs.tf
+
+providers.tf
+
+backend.tf
+
+terraform.tfvars
+
+modules/*
+
+Must-know Topics
+
+Module design (reusable infra)
+
+Remote state (S3 + DynamoDB)
+
+Multi-account / multi-region
+
+Workspaces vs env folders
+
+for_each, count, dynamic
+
+Dependency graph
+
+Import existing infra
+
+State locking & recovery
+
+Secrets handling
+
+Policy-as-code (OPA / Sentinel)
+
+👉 Senior engineers debug state files confidently.
+
+4️⃣ Bash Scripts (SYSTEM GLUE)
+Files
+
+deploy.sh
+
+backup.sh
+
+health-check.sh
+
+cleanup.sh
+
+cron.sh
+
+Must-know Topics
+
+Safe scripting (set -euo pipefail)
+
+Error handling
+
+Environment variables
+
+Argument parsing
+
+Logging
+
+Cron jobs
+
+SSH automation
+
+Process & port handling
+
+Disk / memory checks
+
+Linux signals
+
+👉 Bash is what runs when everything else fails.
+
+5️⃣ Ansible (CONFIGURATION & DAY-2 OPS)
+Files
+
+site.yml
+
+roles/*
+
+inventory
+
+group_vars/*
+
+host_vars/*
+
+templates/*.j2
+
+handlers
+
+Must-know Topics
+
+Role-based structure
+
+Idempotency
+
+Jinja2 templating
+
+Dynamic inventory (cloud)
+
+SSH optimizations
+
+Secret management
+
+Conditional execution
+
+Error recovery
+
+Playbook optimization
+
+Day-2 operations (patching, scaling)
+
+6️⃣ Python (AUTOMATION & TOOLING)
+Files
+
+aws_cleanup.py
+
+alert_handler.py
+
+ci_helper.py
+
+backup_tool.py
+
+Must-know Topics
+
+File I/O
+
+JSON/YAML parsing
+
+REST APIs
+
+SDKs (boto3, k8s client)
+
+Error handling
+
+Retry logic
+
+Logging
+
+CLI tools
+
+Automation frameworks
+
+Writing internal DevOps tools
+
+👉 Python makes you builder, not operator.
+
+7️⃣ Docker & Container Files
+Files
+
+Dockerfile
+
+docker-compose.yml
+
+.dockerignore
+
+Must-know Topics
+
+Multi-stage builds
+
+Image optimization
+
+Security hardening
+
+Non-root containers
+
+Secrets handling
+
+Health checks
+
+Build cache
+
+Image scanning
+
+OCI standards
+
+8️⃣ Security & Policy Files (DEVSECOPS)
+Files
+
+trivy.yaml
+
+opa-policy.rego
+
+kyverno-policy.yaml
+
+network-policy.yaml
+
+Must-know Topics
+
+Shift-left security
+
+Image scanning
+
+Admission control
+
+Policy enforcement
+
+Least privilege
+
+Secrets rotation
+
+Compliance checks
+
+Audit logging
+
+9️⃣ Observability Files (SRE CORE)
+Files
+
+prometheus.yml
+
+alertmanager.yml
+
+grafana-dashboard.json
+
+otel-config.yaml
+
+Must-know Topics
+
+SLIs / SLOs
+
+Alert fatigue prevention
+
+Golden signals
+
+Error budgets
+
+Distributed tracing
+
+Metrics vs logs vs traces
+
+Incident-driven alerts
+
+🔟 Platform Engineering Files
+Files
+
+backstage.yaml
+
+crossplane.yaml
+
+environment-template.yaml
+
+self-service-portal.yaml
+
+Must-know Topics
+
+Golden paths
+
+Self-service infra
+
+Environment templates
+
+Service catalogs
+
+Developer experience (DX)
+
+Guardrails
+
+Governance automation
+
+🧠 SENIOR MENTAL MODEL (IMPORTANT)
+
+You should always think in FILES, not tools:
+
+“What file controls this behavior?”
+
+Senior DevOps engineers:
+
+Design systems via files
+
+Debug YAML faster than logs
+
+Trust Git more than consoles
+
+Automate everything twice
+
+Build platforms, not pipelines
+
+🥇 IF YOU MASTER THESE FILES
+
+You are production-ready for:
+
+Senior DevOps
+
+DevSecOps Engineer
+
+Cloud Engineer
+
+SRE
+
+Platform Engineer

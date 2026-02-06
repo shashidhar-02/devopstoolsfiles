@@ -1,0 +1,75 @@
+---
+# Main Ansible Playbook - site.yml
+# This is the entry point for all infrastructure provisioning and configuration
+
+- name: Configure Web Servers
+  hosts: webservers
+  become: yes
+  roles:
+    - common
+    - nginx
+    - application
+  tags:
+    - web
+    - production
+
+- name: Configure Database Servers
+  hosts: dbservers
+  become: yes
+  roles:
+    - common
+    - mysql
+    - backup
+  tags:
+    - database
+    - production
+
+- name: Configure Load Balancers
+  hosts: loadbalancers
+  become: yes
+  roles:
+    - common
+    - haproxy
+  tags:
+    - loadbalancer
+    - production
+
+- name: Day-2 Operations - Security Patching
+  hosts: all
+  become: yes
+  serial: "30%"  # Rolling update - 30% at a time
+  tasks:
+    - name: Update all packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        autoremove: yes
+      when: ansible_os_family == "Debian"
+      tags: patching
+
+    - name: Check if reboot required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+      
+    - name: Reboot if needed
+      reboot:
+        msg: "Reboot initiated by Ansible for security updates"
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+      when: reboot_required.stat.exists
+      tags: patching
+
+- name: Day-2 Operations - Scaling
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Scale application workers based on load
+      template:
+        src: templates/app-workers.conf.j2
+        dest: /etc/app/workers.conf
+        mode: '0644'
+      notify: restart application
+      tags: scaling

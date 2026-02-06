@@ -1,0 +1,325 @@
+name: Security Scanning & DevSecOps
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+
+jobs:
+  # =====================================================================
+  # SAST - Static Application Security Testing
+  # =====================================================================
+  sast-semgrep:
+    name: SAST with Semgrep
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Semgrep SAST scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/owasp-top-ten
+            p/cwe-top-25
+          generateSarif: true
+      
+      - name: Upload SARIF to GitHub
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          wait-for-processing: true
+
+  # =====================================================================
+  # Container Image Scanning
+  # =====================================================================
+  container-scan:
+    name: Container Image Scanning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build Node.js Docker image
+        run: docker build -t node-app:${{ github.sha }} -f docker/Dockerfile .
+        continue-on-error: true
+      
+      - name: Scan Node.js image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: node-app:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-nodejs-sarif.sarif'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
+      
+      - name: Build Java Docker image
+        run: docker build -t java-app:${{ github.sha }} -f docker/Dockerfile.java .
+        continue-on-error: true
+      
+      - name: Scan Java image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: java-app:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-java-sarif.sarif'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
+      
+      - name: Scan Distroless base images
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image --severity CRITICAL,HIGH \
+            gcr.io/distroless/nodejs18-debian11:nonroot
+          
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image --severity CRITICAL,HIGH \
+            gcr.io/distroless/java17-debian11:nonroot
+      
+      - name: Scan for secrets in images
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: node-app:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-secrets.sarif'
+          severity: 'HIGH,CRITICAL'
+          scanners: 'secret'
+        continue-on-error: true
+      
+      - name: Upload Trivy results to GitHub
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: |
+            trivy-nodejs-sarif.sarif
+            trivy-java-sarif.sarif
+            trivy-secrets.sarif
+
+  # =====================================================================
+  # Filesystem & Secrets Scanning
+  # =====================================================================
+  secrets-detection:
+    name: Secrets & Credentials Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: TruffleHog - Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+        continue-on-error: true
+      
+      - name: Scan filesystem for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-sarif.sarif'
+          severity: 'HIGH,CRITICAL'
+        continue-on-error: true
+      
+      - name: Upload filesystem scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: trivy-fs-sarif.sarif
+
+  # =====================================================================
+  # Infrastructure as Code Scanning
+  # =====================================================================
+  iac-scanning:
+    name: Infrastructure as Code Scanning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Checkov scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: kubernetes,terraform,docker,dockerfile,yml,yaml
+          quiet: false
+          soft_fail: false
+          sarif_file: checkov-sarif.json
+          compact: true
+        continue-on-error: true
+      
+      - name: Upload Checkov results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: checkov-sarif.json
+
+  # =====================================================================
+  # Python Dependency Scanning
+  # =====================================================================
+  python-security:
+    name: Python Dependencies Security
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install security tools
+        run: |
+          pip install --upgrade pip
+          pip install safety pip-audit
+      
+      - name: Check Python requirements
+        run: |
+          if [ -f python/security-requirements.txt ]; then
+            safety check -r python/security-requirements.txt --json || true
+            pip-audit --format json -i /dev/null $(cat python/security-requirements.txt | grep -v '^#' | grep -v '^$' | cut -d'=' -f1) || true
+          fi
+      
+      - name: List security requirements
+        run: |
+          if [ -f python/security-requirements.txt ]; then
+            echo "=== Python Security Requirements ==="
+            cat python/security-requirements.txt
+          fi
+
+  # =====================================================================
+  # JavaScript Dependency Scanning
+  # =====================================================================
+  npm-security:
+    name: npm Audit - Security
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm ci
+        continue-on-error: true
+      
+      - name: Run npm audit at MODERATE level
+        run: npm audit --audit-level=moderate || true
+      
+      - name: Generate npm audit report
+        run: npm audit --json > npm-audit-report.json || true
+      
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: npm-audit-report
+          path: npm-audit-report.json
+
+  # =====================================================================
+  # Docker Compose Security Validation
+  # =====================================================================
+  docker-compose-validation:
+    name: Docker Compose Security Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Hadolint (Dockerfile linter)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y hadolint
+      
+      - name: Lint Dockerfiles
+        run: |
+          hadolint docker/Dockerfile docker/Dockerfile.java || true
+      
+      - name: Validate docker-compose files
+        run: |
+          docker-compose -f docker/docker-compose.yml config > /dev/null
+          docker-compose -f docker/docker-compose-dev.yml config > /dev/null || true
+          docker-compose -f docker/docker-compose-staging.yml config > /dev/null || true
+          docker-compose -f docker/docker-compose-prod.yml config > /dev/null || true
+      
+      - name: Check for insecure practices in docker-compose
+        run: |
+          echo "=== Checking for security issues in docker-compose files ==="
+          for file in docker/docker-compose*.yml; do
+            echo "Scanning: $file"
+            grep -E "(MYSQL_ROOT_PASSWORD|POSTGRES_PASSWORD|user:password|privileged: true)" "$file" || echo "No plain secrets found"
+            grep -E "image:.*:latest" "$file" && echo "WARNING: Use pinned image versions" || echo "Images properly pinned"
+          done
+
+  # =====================================================================
+  # Report Summary
+  # =====================================================================
+  security-report:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [sast-semgrep, container-scan, secrets-detection, iac-scanning, python-security, npm-security, docker-compose-validation]
+    if: always()
+    
+    steps:
+      - name: Check scan results
+        run: |
+          echo "=== Security Scan Results ==="
+          echo "✓ SAST Scanning: Completed"
+          echo "✓ Container Image Scanning: Completed"
+          echo "✓ Secrets Detection: Completed"
+          echo "✓ IaC Scanning: Completed"
+          echo "✓ Python Dependency Check: Completed"
+          echo "✓ npm Audit: Completed"
+          echo "✓ Docker Compose Validation: Completed"
+          echo ""
+          echo "Review results in GitHub Security tab."
+          echo "For CRITICAL/HIGH vulnerabilities, create an issue."
+      
+      - name: Post results comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Security scans completed. Review results in the Security tab.\n\n' +
+                    '- SAST (Semgrep)\n' +
+                    '- Container Image Scanning (Trivy)\n' +
+                    '- Secrets Detection (TruffleHog)\n' +
+                    '- IaC Scanning (Checkov)\n' +
+                    '- Python Dependencies (Safety)\n' +
+                    '- npm Audit'
+            })

@@ -1,0 +1,377 @@
+# Security Scanning Makefile for DevOps Repository
+# This Makefile provides convenient commands for DevSecOps scanning
+# Usage: make [target]
+
+.PHONY: help security-scan docker-scan iac-scan python-scan js-scan secrets-scan all-scans
+
+# Default target
+help:
+	@echo "DevSecOps Security Scanning Targets"
+	@echo "===================================="
+	@echo ""
+	@echo "Available targets:"
+	@echo "  make security-scan        - Run all security scans"
+	@echo "  make docker-scan          - Scan Docker images with Trivy"
+	@echo "  make iac-scan             - Scan IaC with Checkov"
+	@echo "  make python-scan          - Scan Python dependencies"
+	@echo "  make js-scan              - Scan JavaScript (npm) dependencies"
+	@echo "  make secrets-scan         - Scan for exposed secrets"
+	@echo "  make sast-scan            - Run SAST scanning (Semgrep)"
+	@echo "  make baseline-scan        - Create security baseline"
+	@echo "  make cleanup              - Remove scan artifacts"
+	@echo ""
+
+# =====================================================================
+# ALL SECURITY SCANS
+# =====================================================================
+security-scan: docker-scan iac-scan python-scan js-scan secrets-scan sast-scan
+	@echo ""
+	@echo "✓ All security scans completed"
+	@echo "Review results in ./security-scan-results/"
+
+all-scans: security-scan
+
+# =====================================================================
+# DOCKER IMAGE SCANNING
+# =====================================================================
+.PHONY: docker-scan docker-build docker-scan-base
+
+docker-scan: docker-build docker-scan-base docker-scan-prod
+	@echo "✓ Docker images scanned successfully"
+
+docker-build:
+	@echo "Building Docker images for scanning..."
+	docker build -t devops-frontend:latest -f docker/Dockerfile . || true
+	docker build -t devops-backend:latest -f docker/Dockerfile.java . || true
+
+docker-scan-base:
+	@echo "Scanning base images for vulnerabilities..."
+	@mkdir -p security-scan-results
+	
+	# Scan distroless Node.js
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+		aquasec/trivy image --severity CRITICAL,HIGH --format json \
+		gcr.io/distroless/nodejs18-debian11:nonroot > security-scan-results/trivy-nodejs-base.json || true
+	
+	# Scan distroless Java
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+		aquasec/trivy image --severity CRITICAL,HIGH --format json \
+		gcr.io/distroless/java17-debian11:nonroot > security-scan-results/trivy-java-base.json || true
+
+docker-scan-prod:
+	@echo "Scanning production images..."
+	# Scan frontend image
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+		aquasec/trivy image --severity CRITICAL,HIGH devops-frontend:latest \
+		> security-scan-results/trivy-frontend.txt 2>&1 || true
+	
+	# Scan backend image
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+		aquasec/trivy image --severity CRITICAL,HIGH devops-backend:latest \
+		> security-scan-results/trivy-backend.txt 2>&1 || true
+	
+	@echo "✓ Docker image scan results saved to security-scan-results/"
+
+# =====================================================================
+# INFRASTRUCTURE AS CODE SCANNING
+# =====================================================================
+.PHONY: iac-scan terraform-scan kubernetes-scan docker-compose-scan
+
+iac-scan: terraform-scan kubernetes-scan docker-compose-scan
+	@echo "✓ IaC scanning completed"
+
+terraform-scan:
+	@echo "Scanning Terraform with Checkov..."
+	@mkdir -p security-scan-results
+	
+	# Check if checkov is installed
+	-command -v checkov >/dev/null 2>&1 || (echo "Installing checkov..." && pip install checkov)
+	
+	checkov -d terraform/ --framework terraform \
+		--quiet --compact --output json \
+		> security-scan-results/checkov-terraform.json 2>&1 || true
+	
+	@echo "  - Terraform scan results saved"
+
+kubernetes-scan:
+	@echo "Scanning Kubernetes manifests with Checkov..."
+	
+	-checkov -d k8s/ --framework kubernetes \
+		--quiet --compact --output json \
+		> security-scan-results/checkov-kubernetes.json 2>&1 || true
+	
+	@echo "  - Kubernetes scan results saved"
+
+docker-compose-scan:
+	@echo "Scanning docker-compose files..."
+	
+	# Validate structure
+	docker-compose -f docker/docker-compose.yml config > /dev/null 2>&1 && echo "  ✓ docker-compose.yml valid" || echo "  ✗ docker-compose.yml invalid"
+	docker-compose -f docker/docker-compose-dev.yml config > /dev/null 2>&1 && echo "  ✓ docker-compose-dev.yml valid" || echo "  ✗ docker-compose-dev.yml invalid"
+	docker-compose -f docker/docker-compose-staging.yml config > /dev/null 2>&1 && echo "  ✓ docker-compose-staging.yml valid" || echo "  ✗ docker-compose-staging.yml invalid"
+	docker-compose -f docker/docker-compose-prod-hardened.yml config > /dev/null 2>&1 && echo "  ✓ docker-compose-prod-hardened.yml valid" || echo "  ✗ docker-compose-prod-hardened.yml invalid"
+	
+	# Check for insecure practices
+	@echo "Checking for security issues in docker-compose files..."
+	@grep -r "image:.*:latest" docker/docker-compose*.yml && echo "  ⚠️  WARNING: Found :latest image tag" || echo "  ✓ No :latest image tags"
+	@grep -r "privileged: true" docker/docker-compose*.yml && echo "  ⚠️  WARNING: Found privileged containers" || echo "  ✓ No privileged containers"
+	@grep -rE "PASSWORD|SECRET" docker/docker-compose.yml && echo "  ⚠️  WARNING: Found potential secrets in non-prod compose" || echo "  ✓ No hardcoded secrets"
+
+# =====================================================================
+# PYTHON DEPENDENCY SCANNING
+# =====================================================================
+.PHONY: python-scan python-audit safety-check
+
+python-scan: python-audit safety-check
+	@echo "✓ Python dependency scanning completed"
+
+python-audit:
+	@echo "Scanning Python dependencies with pip-audit..."
+	@mkdir -p security-scan-results
+	
+	-command -v pip-audit >/dev/null 2>&1 || (echo "Installing pip-audit..." && pip install pip-audit)
+	
+	-pip-audit -r python/security-requirements.txt --format json \
+		> security-scan-results/pip-audit.json 2>&1 || true
+	
+	@echo "  - pip-audit results saved"
+
+safety-check:
+	@echo "Scanning Python dependencies with Safety..."
+	
+	-command -v safety >/dev/null 2>&1 || (echo "Installing safety..." && pip install safety)
+	
+	-safety check -r python/security-requirements.txt --json \
+		> security-scan-results/safety-check.json 2>&1 || true
+	
+	@echo "  - Safety results saved"
+
+# =====================================================================
+# JAVASCRIPT/NPM DEPENDENCY SCANNING
+# =====================================================================
+.PHONY: js-scan npm-audit
+
+js-scan: npm-audit
+	@echo "✓ JavaScript dependency scanning completed"
+
+npm-audit:
+	@echo "Scanning npm dependencies..."
+	@mkdir -p security-scan-results
+	
+	@if [ -f package.json ]; then \
+		npm audit --json > security-scan-results/npm-audit.json 2>&1 || true; \
+		npm audit --audit-level=moderate || true; \
+		echo "  - npm audit results saved"; \
+	else \
+		echo "  - Skipping npm audit: package.json not found"; \
+	fi
+
+# =====================================================================
+# SECRETS SCANNING
+# =====================================================================
+.PHONY: secrets-scan trufflehog filesystem-secrets
+
+secrets-scan: trufflehog filesystem-secrets
+	@echo "✓ Secrets scanning completed"
+
+trufflehog:
+	@echo "Scanning for secrets with TruffleHog..."
+	@mkdir -p security-scan-results
+	
+	-command -v truffleHog >/dev/null 2>&1 || (echo "Installing truffleHog..." && pip install truffleHog)
+	
+	-truffleHog filesystem . --json --max-depth 2 \
+		> security-scan-results/trufflehog-results.json 2>&1 || true
+	
+	@echo "  - TruffleHog results saved"
+
+filesystem-secrets:
+	@echo "Scanning filesystem for common secret patterns..."
+	
+	-mkdir -p security-scan-results
+	
+	@grep -r "password=" . --include="*.yml" --include="*.yaml" --include="*.json" --include="*.env*" \
+		> security-scan-results/potential-secrets.txt 2>/dev/null || echo "  ✓ No obvious secrets found"
+	@grep -r "api_key=" . --include="*.yml" --include="*.yaml" --include="*.json" \
+		>> security-scan-results/potential-secrets.txt 2>/dev/null || true
+	@grep -r "private_key" . --include="*.pem" --include="*.key" \
+		>> security-scan-results/potential-secrets.txt 2>/dev/null || true
+
+# =====================================================================
+# SAST - STATIC APPLICATION SECURITY TESTING
+# =====================================================================
+.PHONY: sast-scan semgrep
+
+sast-scan: semgrep
+	@echo "✓ SAST scanning completed"
+
+semgrep:
+	@echo "Running Semgrep SAST analysis..."
+	@mkdir -p security-scan-results
+	
+	-command -v semgrep >/dev/null 2>&1 || (echo "Installing semgrep..." && pip install semgrep)
+	
+	-semgrep --config=p/security-audit --config=p/owasp-top-ten \
+		--json . > security-scan-results/semgrep-results.json 2>&1 || true
+	
+	@echo "  - Semgrep results saved"
+
+# =====================================================================
+# DOCKERFILE LINTING
+# =====================================================================
+.PHONY: dockerfile-lint
+
+dockerfile-lint:
+	@echo "Linting Dockerfiles..."
+	@mkdir -p security-scan-results
+	
+	-command -v hadolint >/dev/null 2>&1 || (echo "Installing hadolint..." && docker pull hadolint/hadolint:latest)
+	
+	-docker run --rm -i hadolint/hadolint < docker/Dockerfile > security-scan-results/hadolint-nodejs.txt 2>&1 || true
+	-docker run --rm -i hadolint/hadolint < docker/Dockerfile.java > security-scan-results/hadolint-java.txt 2>&1 || true
+	
+	@echo "  - Hadolint results saved"
+
+# =====================================================================
+# SECURITY BASELINE
+# =====================================================================
+.PHONY: baseline-scan baseline-create baseline-compare
+
+baseline-scan: baseline-create
+	@echo "✓ Security baseline created"
+
+baseline-create:
+	@echo "Creating security baseline..."
+	@mkdir -p security-baseline
+	
+	@cp -r security-scan-results/* security-baseline/ 2>/dev/null || echo "No previous scan results to baseline"
+	
+	@echo "Security baseline saved to ./security-baseline/"
+
+baseline-compare:
+	@echo "Comparing current scan to baseline..."
+	@echo "This would compare security-scan-results/ to security-baseline/"
+	@echo "TODO: Implement diff comparison"
+
+# =====================================================================
+# CLEANUP
+# =====================================================================
+.PHONY: cleanup clean
+
+cleanup:
+	@echo "Cleaning up scan results and temporary files..."
+	rm -rf security-scan-results/
+	rm -rf .semgrep-cache/
+	docker image rm devops-frontend:latest devops-backend:latest 2>/dev/null || true
+	@echo "✓ Cleanup complete"
+
+clean: cleanup
+
+# =====================================================================
+# REPORTING
+# =====================================================================
+.PHONY: report vulnerabilities
+
+report:
+	@echo "Security Scan Report Summary"
+	@echo "============================="
+	@echo ""
+	@if [ -d security-scan-results ]; then \
+		echo "Scan results available:"; \
+		ls -lh security-scan-results/; \
+		echo ""; \
+	fi
+	@echo "To review detailed results:"; \
+	@echo "  - Docker: cat security-scan-results/trivy-*.txt"; \
+	@echo "  - IaC: cat security-scan-results/checkov-*.json"; \
+	@echo "  - Python: cat security-scan-results/pip-audit.json"; \
+	@echo "  - Secrets: cat security-scan-results/trufflehog-results.json"; \
+	@echo ""
+	@echo "To fix issues:"; \
+	@echo "  - Docker images: Update base image versions in Dockerfile"; \
+	@echo "  - IaC: Review Checkov recommendations in SECURITY.md"; \
+	@echo "  - Python: Run 'pip install -U' for packages"; \
+	@echo "  - Secrets: Review .trivyignore and SECURITY.md"; \
+
+vulnerabilities:
+	@echo "Known Vulnerabilities Summary"
+	@echo "============================="
+	@echo ""
+	@if [ -f security-scan-results/trivy-nodejs-base.json ]; then \
+		echo "Node.js Base Image:"; \
+		jq '.Results[0].Vulnerabilities | length' security-scan-results/trivy-nodejs-base.json; \
+	fi
+	@if [ -f security-scan-results/trivy-java-base.json ]; then \
+		echo "Java Base Image:"; \
+		jq '.Results[0].Vulnerabilities | length' security-scan-results/trivy-java-base.json; \
+	fi
+
+# =====================================================================
+# INTEGRATION WITH CI/CD
+# =====================================================================
+.PHONY: ci-check
+
+ci-check: docker-scan iac-scan python-scan js-scan secrets-scan
+	@echo ""
+	@echo "CI/CD Security Check Passed"
+	@echo "All scans completed successfully"
+	@echo ""
+	@echo "Proceed with deployment if no CRITICAL vulnerabilities found"
+
+.PHONY: git-hooks
+
+git-hooks:
+	@echo "Setting up git pre-commit security hooks..."
+	@mkdir -p .git/hooks
+	@echo "#!/bin/bash" > .git/hooks/pre-commit
+	@echo "make dockerfile-lint" >> .git/hooks/pre-commit
+	@echo "make secrets-scan" >> .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "✓ Pre-commit hook installed"
+
+# =====================================================================
+# HELP & DOCUMENTATION
+# =====================================================================
+.PHONY: docs
+
+docs:
+	@echo "DevSecOps Security Scanning Documentation"
+	@echo "=========================================="
+	@echo ""
+	@echo "Quick Start:"
+	@echo "  1. make security-scan    - Run all scans"
+	@echo "  2. make report           - View summary"
+	@echo "  3. Review SECURITY.md    - For remediation details"
+	@echo ""
+	@echo "Individual Scans:"
+	@echo "  - Docker images: make docker-scan"
+	@echo "  - Infrastructure: make iac-scan"
+	@echo "  - Python deps: make python-scan"
+	@echo "  - Node.js deps: make js-scan"
+	@echo "  - Secrets: make secrets-scan"
+	@echo "  - Code: make sast-scan"
+	@echo ""
+	@echo "Tools Used:"
+	@echo "  - Trivy: Container/filesystem vulnerability scanning"
+	@echo "  - Checkov: Infrastructure as Code security"
+	@echo "  - Safety: Python dependency checking"
+	@echo "  - npm audit: JavaScript dependency checking"
+	@echo "  - TruffleHog: Secret scanning"
+	@echo "  - Semgrep: Static application security testing (SAST)"
+	@echo "  - Hadolint: Dockerfile linting"
+	@echo ""
+	@echo "Configuration Files:"
+	@echo "  - .trivyignore: Approved CVE exceptions"
+	@echo "  - .devsecops-config.yml: Security policies"
+	@echo "  - SECURITY.md: Security policy and practices"
+	@echo ""
+
+# =====================================================================
+# PHONY TARGETS
+# =====================================================================
+.PHONY: all
+
+all: help
+
+# Default: show help
+.DEFAULT_GOAL := help

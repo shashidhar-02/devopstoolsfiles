@@ -1,0 +1,53 @@
+# Jinja2 Template - app.service.j2
+# Systemd service file for the application
+
+[Unit]
+Description={{ app_name }} Application Service
+After=network.target {% if groups['dbservers'] is defined %}mysql.service{% endif %}
+
+Documentation=https://docs.example.com/{{ app_name }}
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory={{ app_deploy_path }}
+
+# Environment variables
+Environment="NODE_ENV={{ env }}"
+Environment="PORT={{ app_port }}"
+Environment="WORKERS={{ app_workers }}"
+
+# Start command
+ExecStart=/usr/bin/node {{ app_deploy_path }}/server.js
+
+# Restart policy (idempotency and error recovery)
+Restart=always
+RestartSec=10s
+StartLimitInterval=5min
+StartLimitBurst=3
+
+# Resource limits (conditional based on environment)
+{% if env == 'production' %}
+LimitNOFILE=65536
+LimitNPROC=4096
+{% else %}
+LimitNOFILE=1024
+LimitNPROC=512
+{% endif %}
+
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ app_deploy_path }}
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ app_name }}
+
+[Install]
+WantedBy=multi-user.target

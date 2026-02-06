@@ -1,0 +1,55 @@
+Kubernetes YAML (MOST CRITICAL)
+
+Files you must master writing end-to-end:
+
+Core
+
+Deployment.yaml
+
+Service.yaml
+
+Ingress.yaml
+
+ConfigMap.yaml
+
+Secret.yaml
+
+Namespace.yaml
+
+Advanced / Senior
+
+StatefulSet.yaml
+
+DaemonSet.yaml
+
+HPA.yaml
+
+PDB.yaml
+
+NetworkPolicy.yaml
+
+RBAC (Role, ClusterRole, Binding)
+
+PriorityClass.yaml
+
+Must-know Topics
+
+Resource requests & limits
+
+Liveness / readiness / startup probes
+
+Rolling update strategies
+
+Affinity / anti-affinity
+
+Taints & tolerations
+
+SecurityContext (non-root, fsGroup)
+
+Multi-env overlays (dev/stage/prod)
+
+Helm templating logic
+
+Kustomize patches
+
+👉 If you can’t write these blind → not senior

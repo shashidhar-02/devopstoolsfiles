@@ -1,0 +1,34 @@
+apiVersion: platform.devops/v1
+kind: EnvironmentTemplate
+metadata:
+  name: standard-app-env
+spec:
+  description: "Standard app environment template with security guardrails"
+  parameters:
+    - name: environment
+      description: "Environment name"
+      allowed: ["dev", "staging", "prod"]
+    - name: owner
+      description: "Service owner"
+    - name: region
+      description: "Deployment region"
+      allowed: ["us-east-1", "eu-west-1", "ap-south-1"]
+    - name: tier
+      description: "Service tier"
+      allowed: ["gold", "silver", "bronze"]
+  defaults:
+    resources:
+      cpu: "500m"
+      memory: "512Mi"
+    security:
+      runAsNonRoot: true
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+  outputs:
+    - name: namespace
+      value: "${environment}-${owner}"
+    - name: labels
+      value:
+        owner: "${owner}"
+        env: "${environment}"
+        tier: "${tier}"

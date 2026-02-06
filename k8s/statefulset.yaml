@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: StatefulSets
+metadata:
+  name: my-statefulset
+spec:
+  serviceName: "my-service"
+  replicas : 3
+  selector:
+    matchLabels: 
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+      spec:
+        containers: 
+        - name : my-container
+          image: my-image:1.0.0
+          ports:
+          - containerPort: 80
+          volumeMounts:
+          - name: my-volume
+            mountPath: /data
+          resources:
+            requests:
+              memoruy: "128Mi"
+              cpu: "250m"
+            limits:
+              memory : "250Mi"
+              cpu: "500m"
+        volumeClaimtemplates:
+        - metadata:
+            name: my-volume
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+# Notes:
+# StatefulSet.yaml
+# Purpose of StatefulSets (managing stateful applications)
+# Key features (stable network identity, ordered deployment and scaling, persistent storage)
+# StatefulSet configuration (serviceName, replicas, selector, template)
+# Advanced Topics
+# Using StatefulSets with headless services
+# Best practices for managing stateful applications in Kubernetes
+

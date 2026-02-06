@@ -1,0 +1,20 @@
+---
+# roles/application/handlers/main.yml
+# Application handlers
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+  listen: reload systemd
+
+- name: restart application
+  systemd:
+    name: "{{ app_name }}"
+    state: restarted
+  listen: restart application
+
+- name: graceful restart application
+  systemd:
+    name: "{{ app_name }}"
+    state: reloaded
+  listen: graceful restart application

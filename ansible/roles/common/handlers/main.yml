@@ -1,0 +1,19 @@
+---
+# roles/common/handlers/main.yml
+# Handlers for common role - only execute when notified
+
+- name: restart ntp
+  service:
+    name: ntp
+    state: restarted
+  listen: restart ntp
+
+- name: restart monitoring
+  service:
+    name: "{{ monitoring_agent }}"
+    state: restarted
+  listen: restart monitoring
+
+- name: reload firewall
+  command: ufw reload
+  listen: reload firewall

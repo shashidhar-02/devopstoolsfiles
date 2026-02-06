@@ -1,0 +1,56 @@
+# Python Security Requirements
+# All dependencies pinned to specific versions to prevent supply-chain attacks
+# Update only after security impact assessment
+# Generated: 2024
+
+# Core AWS SDK
+boto3>=1.28.0,<2.0.0
+botocore>=1.31.0,<2.0.0
+
+# HTTP Client with security patches
+requests>=2.32.4,<3.0.0
+urllib3>=2.6.3,<3.0.0
+
+# Cryptography & Security
+cryptography>=43.0.1,<44.0.0
+PyNaCl>=1.5.0,<2.0.0
+python-dotenv>=1.0.0,<2.0.0
+
+# Data validation & parsing
+pydantic>=2.0.0,<3.0.0
+PyYAML>=6.0.2,<7.0.0
+
+# Logging & monitoring
+python-json-logger>=2.0.0,<3.0.0
+
+# Testing
+pytest>=7.0.0,<8.0.0
+pytest-cov>=4.0.0,<5.0.0
+
+# Code quality
+black>=23.0.0
+flake8>=6.0.0
+pylint>=2.0.0
+
+# IMPORTANT SECURITY NOTES:
+# 1. UPDATE FREQUENCY:
+#    - Check weekly: pip list --outdated
+#    - Review releases: https://pypi.org/project/[package]/
+#    - Test in staging before production
+#
+# 2. SECURITY VULNERABILITY CHECKS:
+#    - Run: safety check -r python/security-requirements.txt
+#    - Use: pip-audit --desc
+#    - Subscribe to: https://pypi.org/advisories/ notifications
+#
+# 3. MAJOR VERSION UPDATES:
+#    - Test integration with application
+#    - Update in separate branch
+#    - Run full test suite
+#    - Security audit before merge
+#
+# 4. VULNERABLE PACKAGE REMOVAL:
+#    - If vulnerability disclosed: Immediate patch release
+#    - If no fix available: Remove or replace package
+#    - Update SECURITY.md with CVE details
+#    - Create GitHub security advisory

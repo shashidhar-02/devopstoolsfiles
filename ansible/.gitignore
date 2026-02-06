@@ -1,0 +1,50 @@
+# Ansible .gitignore
+
+# Vault password files
+.vault_pass
+vault_pass.txt
+*.vault
+
+# Retry files
+*.retry
+retry/
+
+# Log files
+*.log
+ansible.log
+
+# Fact cache
+/tmp/ansible_facts
+.ansible_facts/
+
+# Python
+*.pyc
+__pycache__/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# SSH control files
+/tmp/ansible-ssh-*
+
+# Local environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets that should never be committed
+secrets.yml.dec
+*_decrypted.yml
+private_keys/
+*.pem
+*.key

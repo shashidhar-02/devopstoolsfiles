@@ -1,0 +1,141 @@
+#githubworkflows.yml devsecops ci cd pipeline high enterprise level secuirty end to end full from start end end
+name: CI/CD Pipeline
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up JDK 11
+      uses: actions/setup-java@v2
+      with:
+        java-version: '11'
+
+    - name: Build with Maven
+      run: mvn clean install
+
+    - name: Run Unit Tests
+      run: mvn test
+
+    - name: Build Docker Image
+      run: |
+        docker build -t my-app:${{ github.sha }} .
+        echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+        docker push my-app:${{ github.sha }}
+    - name: Deploy to Kubernetes
+      uses: azure/k8s-deploy@v1
+      with:
+        namespace: default
+        manifests: |
+          k8s/deployment.yaml
+          k8s/service.yaml
+        images: |
+          my-app:${{ github.sha }}
+    - name: Security Scan
+      uses: aquasecurity/trivy-action@v0.6.0
+      with:
+        image-ref: my-app:${{ github.sha }}
+    - name: Notify on Slack
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        fields: repo,commit,author,workflow,job,took
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    - name: Cleanup
+      if: always()
+      run: |
+        docker logout
+    - name: Post Deployment Tests
+      run: |
+        # Add commands to run post-deployment tests
+        echo "Running post-deployment tests..."
+    - name: Rollback on Failure
+      if: failure()
+      run: |
+        # Add commands to rollback deployment
+        echo "Rolling back deployment..."
+    - name: Cache Maven Dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+    - name: Code Quality Analysis
+      uses: sonarsource/sonarcloud-github-action@v1
+      with:
+        args: >
+          -Dsonar.projectKey=my-project
+    - name: Infrastructure as Code Validation
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: ./k8s
+    - name: Multi-Environment Deployment
+      run: |
+        # Add commands to deploy to multiple environments
+        echo "Deploying to dev, staging, and prod..."
+    - name: Use GitHub Secrets
+      run: |
+        # Example of using GitHub Secrets
+        echo "Using secrets in the workflow..."
+    - name: Monitor Deployment
+      uses: some-monitoring-action@v1
+      with:
+        deployment: my-app
+    - name: Generate Deployment Reports
+      run: |
+        # Add commands to generate deployment reports
+        echo "Generating deployment reports..."
+    - name: Schedule Regular Deployments
+      if: github.event_name == 'schedule'
+      run: |
+        # Add commands for scheduled deployments
+        echo "Running scheduled deployment..."
+    - name: Integrate with Issue Tracking
+      uses: some-issue-tracking-action@v1
+      with:
+        issue: DEPLOYMENT-123
+    - name: Backup Before Deployment
+      run: |
+        # Add commands to backup current state
+        echo "Backing up current deployment state..."
+    - name: Canary Deployment
+      run: |
+        # Add commands for canary deployment
+        echo "Performing canary deployment..."
+    - name: Blue-Green Deployment
+      run: |
+        # Add commands for blue-green deployment
+        echo "Performing blue-green deployment..."
+    - name: Chaos Testing
+      run: |
+        # Add commands for chaos testing
+        echo "Running chaos tests..."
+    - name: Compliance
+      run: |
+        # Add commands to ensure compliance
+        echo "Checking compliance..."
+    - name: Documentation Generation
+      run: |
+        # Add commands to generate documentation
+        echo "Generating deployment documentation..."
+
+# Notes:
+# CI/CD Pipeline with GitHub Actions    
+
+# Purpose of CI/CD Pipelines (automating build, test, and deployment)
+# Key stages (build, test, deploy, notify)
+# Advanced Topics
+
+# Integrating security scans into the CI/CD pipeline
+# Deploying to multiple environments (dev, staging, prod)
+# Using GitHub Secrets for sensitive data management

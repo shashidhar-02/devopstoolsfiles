@@ -1,0 +1,271 @@
+version: '3.9'
+
+# Docker Compose demonstrating production patterns:
+# - Multiple services with health checks
+# - Non-root containers  - Secrets handling
+# - Build context and cache
+# - Networking and volumes
+# - Resource limits
+# - Restart policies
+# - Logging configuration
+
+services:
+  # Main Application Service
+  app:
+    # Build from Dockerfile with build args
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      # Build args for build-time secrets and configuration
+      args:
+        BUILD_DATE: "${BUILD_DATE:-}"
+        VCS_REF: "${VCS_REF:-}"
+        VERSION: "${VERSION:-1.0.0}"
+      # Cache management
+      cache_from:
+        - myregistry.azurecr.io/app:latest
+    
+    # Container name for easy reference
+    container_name: devops-app
+    
+    # Image name and tag
+    image: myregistry.azurecr.io/app:${VERSION:-1.0.0}
+    
+    # Pull policy: use local, fallback to registry
+    pull_policy: if_not_present
+    
+    # Networking configuration
+    networks:
+      - app-network
+    
+    # Port mapping (host:container)
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    
+    # Expose ports (for internal communication)
+    expose:
+      - 3000
+    
+    # Environment variables
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DB_NAME:-appdb}
+      DATABASE_USER: ${DB_USER:-appuser}
+      # Password managed via secrets (not hardcoded)
+      DATABASE_PASSWORD_FILE: /run/secrets/db_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    
+    # Secrets (mounted as files, not env vars - more secure)
+    secrets:
+      - db_password
+      - api_key
+    
+    # Volumes for persistence and development
+    volumes:
+      # Application code (development)
+      - ./src:/app/src:ro
+      # Logs volume
+      - app-logs:/app/logs
+      # Secrets (read-only)
+      - type: bind
+        source: ./secrets
+        target: /app/secrets
+        read_only: true
+    
+    # Restart policy (handle crashes/failures)
+    restart: on-failure:3
+    
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits and requests
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Logging configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=app"
+    
+    # Security options (no privilege escalation)
+    security_opt:
+      - no-new-privileges:true
+    
+    # User context  (non-root)
+    user: "1001:1001"
+    
+    # Capability drop (least privilege)
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    
+    # Dependency management
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    # Labels for metadata and orchestration
+    labels:
+      com.example.version: "1.0.0"
+      com.example.description: "Production application"
+      com.example.environment: "production"
+
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:15-alpine
+    container_name: devops-postgres
+    
+    networks:
+      - app-network
+    
+    ports:
+      - "5432:5432"
+    
+    environment:
+      POSTGRES_DB: ${DB_NAME:-appdb}
+      POSTGRES_USER: ${DB_USER:-appuser}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    
+    secrets:
+      - db_password
+    
+    # Data persistence volume
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Initialization scripts
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    # Health check for database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-appuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    security_opt:
+      - no-new-privileges:true
+
+  # Redis Cache Service
+  redis:
+    image: redis:7-alpine
+    container_name: devops-redis
+    
+    networks:
+      - app-network
+    
+    ports:
+      - "6379:6379"
+    
+    command:
+      - redis-server
+      - "--appendonly"
+      - "yes"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:-changeme}"
+      - "--maxmemory"
+      - "256mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+    
+    # Persistent storage
+    volumes:
+      - redis-data:/data
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    security_opt:
+      - no-new-privileges:true
+
+# Top-level secrets (from files or generated)
+secrets:
+  db_password:
+    # External secret would be in /run/secrets/db_password
+    # Or use file source for development:
+    file: ./secrets/db_password.txt
+  
+  api_key:
+    file: ./secrets/api_key.txt
+
+# Top-level networks
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Top-level volumes
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  app-logs:
+    driver: local

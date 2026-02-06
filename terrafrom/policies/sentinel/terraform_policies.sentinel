@@ -1,0 +1,201 @@
+# =============================================================================
+# POLICY AS CODE - SENTINEL EXAMPLES
+# =============================================================================
+# HashiCorp Sentinel policies for Terraform Enterprise/Cloud
+# Use with: terraform apply -auto-approve
+
+# =============================================================================
+# IMPORTS
+# =============================================================================
+
+import "tfplan/v2" as tfplan
+import "strings"
+import "types"
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+# Find all resources of a specific type
+find_resources = func(type) {
+    resources = {}
+    for tfplan.resource_changes as address, rc {
+        if rc.type is type and
+           rc.mode is "managed" and
+           (rc.change.actions contains "create" or rc.change.actions contains "update") {
+            resources[address] = rc
+        }
+    }
+    return resources
+}
+
+# Check if a resource has a specific tag
+has_required_tags = func(resource, required_tags) {
+    if "tags" not in keys(resource.change.after) {
+        return false
+    }
+    
+    for required_tags as tag {
+        if tag not in keys(resource.change.after.tags) {
+            return false
+        }
+    }
+    
+    return true
+}
+
+# =============================================================================
+# ENCRYPTION POLICY
+# =============================================================================
+
+# Policy: All S3 buckets must have encryption enabled
+s3_encryption_policy = rule {
+    all find_resources("aws_s3_bucket") as address, rc {
+        rc.change.after.server_side_encryption_configuration is not null
+    }
+}
+
+# Policy: All RDS instances must be encrypted
+rds_encryption_policy = rule {
+    all find_resources("aws_db_instance") as address, rc {
+        rc.change.after.storage_encrypted is true
+    }
+}
+
+# Policy: All EBS volumes must be encrypted
+ebs_encryption_policy = rule {
+    all find_resources("aws_ebs_volume") as address, rc {
+        rc.change.after.encrypted is true
+    }
+}
+
+# =============================================================================
+# TAGGING POLICY
+# =============================================================================
+
+required_tags = ["Environment", "ManagedBy", "Project", "Owner", "CostCenter"]
+
+# Policy: All resources must have required tags
+mandatory_tags_policy = rule {
+    all find_resources("aws_instance") as address, rc {
+        has_required_tags(rc, required_tags)
+    } and
+    all find_resources("aws_db_instance") as address, rc {
+        has_required_tags(rc, required_tags)
+    } and
+    all find_resources("aws_s3_bucket") as address, rc {
+        has_required_tags(rc, required_tags)
+    }
+}
+
+# =============================================================================
+# NETWORK SECURITY POLICY
+# =============================================================================
+
+# Policy: No security group should allow SSH from 0.0.0.0/0
+no_public_ssh_policy = rule {
+    all find_resources("aws_security_group") as address, rc {
+        all rc.change.after.ingress as ingress {
+            not (ingress.from_port is 22 and
+                 "0.0.0.0/0" in ingress.cidr_blocks)
+        }
+    }
+}
+
+# Policy: No RDS instance should be publicly accessible
+no_public_rds_policy = rule {
+    all find_resources("aws_db_instance") as address, rc {
+        rc.change.after.publicly_accessible is false
+    }
+}
+
+# =============================================================================
+# PRODUCTION SAFEGUARDS
+# =============================================================================
+
+# Policy: Production RDS must have Multi-AZ enabled
+prod_rds_multi_az_policy = rule {
+    all find_resources("aws_db_instance") as address, rc {
+        if strings.has_prefix(address, "prod") or
+           strings.contains(rc.change.after.identifier, "prod") {
+            rc.change.after.multi_az is true
+        } else {
+            true
+        }
+    }
+}
+
+# Policy: Production RDS must have deletion protection
+prod_rds_deletion_protection_policy = rule {
+    all find_resources("aws_db_instance") as address, rc {
+        if strings.has_prefix(address, "prod") or
+           strings.contains(rc.change.after.identifier, "prod") {
+            rc.change.after.deletion_protection is true
+        } else {
+            true
+        }
+    }
+}
+
+# Policy: Production RDS must have minimum 30 days backup retention
+prod_rds_backup_policy = rule {
+    all find_resources("aws_db_instance") as address, rc {
+        if strings.has_prefix(address, "prod") or
+           strings.contains(rc.change.after.identifier, "prod") {
+            rc.change.after.backup_retention_period >= 30
+        } else {
+            true
+        }
+    }
+}
+
+# =============================================================================
+# COST CONTROL POLICY
+# =============================================================================
+
+approved_instance_types = [
+    "t3.micro", "t3.small", "t3.medium", "t3.large",
+    "c5.large", "c5.xlarge", "c5.2xlarge",
+    "r5.large", "r5.xlarge"
+]
+
+# Policy: Only approved instance types can be used
+approved_instance_types_policy = rule when strings.has_prefix(tfplan.variables.environment, "dev") {
+    all find_resources("aws_instance") as address, rc {
+        rc.change.after.instance_type in approved_instance_types
+    }
+}
+
+# =============================================================================
+# COMPLIANCE POLICY
+# =============================================================================
+
+# Policy: All resources must be in approved regions
+approved_regions = ["us-east-1", "us-west-2", "eu-west-1"]
+
+region_compliance_policy = rule {
+    all tfplan.configuration.provider_config["aws"] as _, provider {
+        if "region" in keys(provider.expressions) {
+            provider.expressions.region.constant_value in approved_regions
+        } else {
+            true
+        }
+    }
+}
+
+# =============================================================================
+# MAIN POLICY
+# =============================================================================
+
+# Advisory policies (warnings)
+main = rule {
+    s3_encryption_policy and
+    rds_encryption_policy and
+    ebs_encryption_policy and
+    no_public_ssh_policy and
+    no_public_rds_policy and
+    prod_rds_multi_az_policy and
+    prod_rds_deletion_protection_policy and
+    prod_rds_backup_policy and
+    region_compliance_policy
+}

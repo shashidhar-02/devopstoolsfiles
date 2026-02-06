@@ -1,0 +1,77 @@
+# Jinja2 Template - vhost.conf.j2
+# Virtual host configuration with SSL and health checks
+
+{% if ssl_enabled %}
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    server_name {{ ansible_fqdn }};
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS Server
+server {
+    listen 443 ssl http2;
+    server_name {{ ansible_fqdn }};
+
+    ssl_certificate {{ ssl_cert_path }};
+    ssl_certificate_key {{ ssl_key_path }};
+
+{% else %}
+# HTTP Server (non-SSL)
+server {
+    listen 80;
+    server_name {{ ansible_fqdn }};
+{% endif %}
+
+    root {{ app_deploy_path }}/public;
+    index index.html index.htm;
+
+    # Access and error logs
+    access_log /var/log/nginx/{{ app_name }}_access.log;
+    error_log /var/log/nginx/{{ app_name }}_error.log;
+
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+
+    # Proxy to application
+    location / {
+        proxy_pass http://127.0.0.1:{{ app_port }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeout settings (dynamic based on env)
+        proxy_connect_timeout {{ 60 if env == 'production' else 30 }};
+        proxy_send_timeout {{ 60 if env == 'production' else 30 }};
+        proxy_read_timeout {{ 60 if env == 'production' else 30 }};
+
+        # Caching (conditional)
+        {% if enable_caching == 'true' %}
+        proxy_cache_valid 200 {{ cache_ttl }}s;
+        proxy_cache_use_stale error timeout http_500 http_502 http_503;
+        {% endif %}
+    }
+
+    # Static files (conditional optimization)
+    {% if env == 'production' %}
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    {% endif %}
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    
+    {% if ssl_enabled %}
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    {% endif %}
+}

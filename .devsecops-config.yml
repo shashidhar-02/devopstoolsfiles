@@ -1,0 +1,305 @@
+# DevSecOps Configuration & Scanning Policies
+# This file documents all security scanning tools and configurations
+
+scanners:
+  trivy:
+    enabled: true
+    description: "Container and filesystem scanning for vulnerabilities"
+    scan_types:
+      - container_images
+      - filesystem
+      - secrets
+    severity_levels:
+      - CRITICAL
+      - HIGH
+    config_file: ".trivyignore"
+    command_examples:
+      scan_docker_image: "trivy image --severity HIGH,CRITICAL gcr.io/distroless/nodejs18-debian11"
+      scan_filesystem: "trivy fs --security-checks secret,config,vuln ."
+      scan_docker_compose: "trivy image --list-all-pkgs docker-image-name"
+    frequency: "On pull requests and daily"
+    automation: "GitHub Actions CI/CD"
+
+  checkov:
+    enabled: true
+    description: "Infrastructure as Code (IaC) security scanning"
+    scan_targets:
+      - terraform
+      - kubernetes
+      - ansible
+    checks_enabled:
+      - CKV_K8S_1  # Images must have version tag
+      - CKV_K8S_2  # CPU limits required
+      - CKV_K8S_4  # Memory limits required
+      - CKV_K8S_5  # Image pull policy always
+      - CKV_K8S_8  # Liveness probe configured
+      - CKV_K8S_9  # Readiness probe configured
+      - CKV_K8S_13 # No pull secrets
+      - CKV_TF_1   # S3 bucket versioning
+      - CKV_TF_2   # S3 bucket public access
+      - CKV_TF_21  # S3 encryption
+      - CKV_AWS_1  # S3 bucket encryption
+      - CKV_AWS_49 # DynamoDB encryption
+      - CKV_AWS_23 # Security group unrestricted ingress
+    command_examples:
+      scan_terraform: "checkov -d terraform/ --framework terraform --severity HIGH,CRITICAL"
+      scan_kubernetes: "checkov -d k8s/ --framework kubernetes"
+      scan_all: "checkov -d . --quiet --severity HIGH,CRITICAL"
+    frequency: "On pull requests"
+    automation: "GitHub Actions CI/CD"
+
+  safety:
+    enabled: true
+    description: "Python dependency vulnerability scanning"
+    scan_files:
+      - python/requirements.txt
+      - python/security-requirements.txt
+    database: "Safety DB"
+    command_examples:
+      check_requirements: "safety check -r python/security-requirements.txt"
+      check_installed: "safety check --audit"
+      update_database: "safety update-db"
+    frequency: "On pull requests and daily"
+    automation: "GitHub Actions CI/CD"
+
+  npm_audit:
+    enabled: true
+    description: "JavaScript dependency vulnerability scanning"
+    audit_level: "moderate"  # moderate, high, or critical
+    config_file: ".npm-audit-ignore.json"
+    command_examples:
+      audit_check: "npm audit --audit-level=moderate"
+      audit_fix: "npm audit fix"
+      generate_report: "npm audit --json > npm-audit-report.json"
+    auto_fix: false  # Manual review before fixing
+    frequency: "On pull requests"
+    automation: "GitHub Actions CI/CD"
+
+  semgrep:
+    enabled: true
+    description: "SAST (Static Application Security Testing)"
+    rulesets:
+      - p/security-audit
+      - p/owasp-top-ten
+      - p/cwe-top-25
+    supported_languages:
+      - python
+      - javascript
+      - java
+      - javascript
+      - go
+      - ruby
+    command_examples:
+      scan_all: "semgrep --config=p/security-audit --json ."
+      scan_python: "semgrep --config=p/security-audit python/"
+    frequency: "On pull requests"
+    automation: "Semgrep App via GitHub"
+
+security_policies:
+  base_images:
+    node:
+      preference: ["gcr.io/distroless/nodejs18-debian11:nonroot", "node:18-bookworm-slim"]
+      blocked: ["node:18-alpine", "node:latest", "node:18"]
+      reasoning: "Distroless = no OS layer = 70% smaller, zero CVEs"
+    
+    java:
+      preference: ["gcr.io/distroless/java17-debian11:nonroot"]
+      builder: ["maven:3.9-eclipse-temurin-17-alpine"]  # Builder is temporary
+      blocked: ["eclipse-temurin:17-jre-alpine", "openjdk:17", "java:latest"]
+      reasoning: "Distroless runtime = immutable, no shell, minimal attack surface"
+    
+    postgres:
+      preference: ["postgres:16-alpine"]
+      blocked: ["postgres:latest", "postgres:16-bullseye"]
+      reasoning: "Alpine is most minimal for data layer"
+    
+    redis:
+      preference: ["redis:7-alpine"]
+      blocked: ["redis:latest", "redis:7"]
+      reasoning: "Alpine minimal for cache layer"
+
+  runtime_security:
+    - policy: "Non-root user enforcement"
+      implementation: "USER nonroot (distroless) or UID 1001+ (others)"
+      verification: "docker inspect <image> | grep User"
+    
+    - policy: "Drop all capabilities"
+      implementation: "cap_drop: ALL in docker-compose"
+      verification: "docker inspect <image> | grep CapDrop"
+    
+    - policy: "Read-only root filesystem"
+      implementation: "read_only: true in docker-compose (where safe)"
+      verification: "Can only write to declared volumes"
+    
+    - policy: "Resource limits"
+      implementation: "cpus, memory, memory_swap in docker-compose"
+      verification: "docker stats shows resource tracking"
+    
+    - policy: "Health checks"
+      implementation: "HEALTHCHECK in Dockerfile or docker-compose"
+      verification: "Health status visible in docker ps"
+
+  kubernetes_security:
+    network_policies:
+      enabled: true
+      default: "deny-all"
+      documentation: "See k8s/Networkpolicy.yaml"
+    
+    rbac:
+      enabled: true
+      policy: "Least privilege - no cluster-admin for workloads"
+      documentation: "See k8s/ files with serviceAccountName"
+    
+    pod_security:
+      privileged: false
+      allow_privilege_escalation: false
+      read_only_root_filesystem: true
+      run_as_non_root: true
+      run_as_user: "non-zero-UID"
+      drop_capabilities: ["ALL"]
+      documentation: "See securityContext in k8s deployments"
+    
+    secrets_management:
+      encryption: "etcd encryption at rest (cluster config required)"
+      rotation: "Quarterly manual rotation required"
+      storage: "Use External Secrets Operator for production"
+      documentation: "See k8s/secret.yaml"
+
+  terraform_security:
+    aws_iam:
+      principle: "Least privilege access"
+      validation: "Checkov CKV_AWS_* checks"
+      denied_actions:
+        - "elastic:*"
+        - "iam:*"
+        - "*:*"
+    
+    s3_buckets:
+      encryption: "Required with KMS key"
+      versioning: "Required for production"
+      public_access_block: "Always enabled"
+      logging: "CloudTrail logging enabled"
+      validation: "Checkov CKV_TF_* checks"
+    
+    rds_databases:
+      encryption: "Required with KMS"
+      publicly_accessible: false
+      backup_retention: "Minimum 7 days"
+      storage_encrypted: true
+      validation: "Checkov RDS checks"
+    
+    vpc_security:
+      security_groups: "Least privilege (no 0.0.0.0/0 except on ALB)"
+      nacls: "Explicit rules for required traffic"
+      logging: "VPC Flow Logs enabled"
+
+  python_security:
+    dependency_pinning:
+      required: true
+      file: "security-requirements.txt"
+      format: "package>=min-version,<next-major-version"
+    
+    secret_handling:
+      do: ["Use environment variables for secrets",
+           "Use .env files (not committed)",
+           "Use AWS Secrets Manager in production"]
+      dont: ["Hardcode credentials",
+             "Log sensitive data",
+             "Commit .env files"]
+    
+    code_practices:
+      input_validation: "Always validate and sanitize user input"
+      error_handling: "Don't expose stack traces in logs"
+      sql_injection: "Use parameterized queries"
+      command_injection: "Never use shell=True with user input"
+
+  container_secrets:
+    methods:
+      - name: "Docker compose secrets (file-based)"
+        use: "Development, staging"
+        location: ".secrets/ directory (add to .gitignore)"
+      
+      - name: "Environment variables (secure passing)"
+        use: "Development only"
+        method: "Pass via --env flag at runtime, not in code"
+      
+      - name: "AWS Secrets Manager"
+        use: "Production"
+        implementation: "Fetched at runtime by application"
+    
+    never:
+      - Hardcode secrets in config files
+      - Commit secrets to git
+      - Pass secrets in container build args
+      - Log secrets to stdout/stderr
+
+compliance_requirements:
+  standards_met:
+    - OWASP Container Security Top 10
+    - CIS Docker Benchmark v1.4+
+    - CIS Kubernetes Benchmark v1.6+
+    - NIST Cybersecurity Framework CSF 1.1
+    - PCI DSS (partial - network layer)
+    - SOC 2 Type II (partial - audit/RBAC)
+
+  audit_trails:
+    - Kubernetes: Audit logs via kube-apiserver
+    - Docker: Container runtime logs
+    - Infrastructure: CloudTrail (AWS), Stackdriver (GCP)
+    - Code: Git commit history with signatures
+
+  enforcement:
+    - Pre-commit hooks prevent secret commits
+    - CI/CD pipeline gates on security scanning
+    - Policy as Code (OPA) enforces Kubernetes policies
+    - Infrastructure as Code validated before apply
+
+incident_response:
+  critical_cve: "$CVE discovered in used dependency"
+    timeline:
+      t0: "Alert received"
+      t+24h: "Initial assessment"
+      t+3d: "Mitigation plan"
+      t+7d: "Patch released"
+      t+14d: "Post-mortem"
+
+  process:
+    - Immediately notify security team
+    - Create incident issue (confidential)
+    - Assess impact and exploitability
+    - Prioritize remediation
+    - Test patches in staging first
+    - Deploy fixes to production
+    - Monitor for exploitation attempts
+    - Post-incident retrospective
+
+monitoring_and_alerts:
+  vulnerability_feeds:
+    - CVE NVD Feed (daily)
+    - GitHub Dependabot (automated PRs)
+    - Snyk Monitoring (real-time)
+  
+  alerting:
+    critical: "Immediate Slack notification"
+    high: "Daily digest"
+    medium: "Weekly report"
+    
+  response_owners:
+    docker: "Container Security Team"
+    kubernetes: "Platform Engineering"
+    terraform: "Infrastructure Team"
+    python: "Application Security"
+    dependencies: "DevSecOps Lead"
+
+documentation:
+  - "SECURITY.md" - This security policy document
+  - ".trivyignore" - Approved CVE exceptions
+  - "docker/README.md" - Docker security notes
+  - "k8s/README.md" - Kubernetes security context
+  - "terraform/README.md" - Terraform security validation
+  - "Architecture Diagram" - With security boundaries marked
+
+---
+Last Updated: 2024
+Maintained By: DevSecOps Team
+Review Frequency: Quarterly

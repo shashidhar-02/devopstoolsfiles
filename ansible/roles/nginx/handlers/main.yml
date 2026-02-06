@@ -1,0 +1,20 @@
+---
+# roles/nginx/handlers/main.yml
+# Handlers for Nginx - only run when notified
+
+- name: restart nginx
+  service:
+    name: nginx
+    state: restarted
+  listen: restart nginx
+
+- name: reload nginx
+  service:
+    name: nginx
+    state: reloaded
+  listen: reload nginx
+
+- name: test nginx config
+  command: nginx -t
+  changed_when: false
+  listen: test nginx config

@@ -1,0 +1,36 @@
+#argo-rollout.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: my-rollout
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: my-container
+        image: my-image:latest
+        ports:
+        - containerPort: 80
+  strategy:
+    canary:
+      steps:
+      - setWeight: 20
+      - pause: {}
+      - setWeight: 50
+      - pause: {}
+      - setWeight: 100
+      - pause: {}
+# Notes:
+# Argo Rollout.yaml
+# Purpose of Argo Rollouts (advanced deployment strategies)
+# Key features (canary deployments, blue-green deployments, traffic shaping)
+# Argo Rollout configuration (replicas, selector, template, strategy)
+# Advanced Topics
+# Using Argo Rollouts with service meshes (Istio, Linkerd)

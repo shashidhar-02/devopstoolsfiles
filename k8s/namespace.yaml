@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-namespace
+  selfLink: /api/v1/namespaces/my-namespace
+  uid: 12345678-90ab-cdef-1234-567890abcdef
+  resourceVersion: "123456"
+  creationTimestamp: "2024-06-01T12:00:00Z"
+# Notes:
+# Namespace.yaml
+# Purpose of namespaces (isolation, resource management)
+# Default namespaces (default, kube-system, kube-public)
+# Creating and managing namespaces
+# Advanced Topics
+# Resource quotas and limits within namespaces
+# Network policies for namespace isolation

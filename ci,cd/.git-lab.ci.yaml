@@ -1,0 +1,64 @@
+##.gitlab-ci.yml production ready ci cd pipeline devsecops high enterprise level security full end to end from start to end
+stages:
+  - build
+  - test
+  - docker-build
+  - deploy
+  - security-scan
+  - notify
+  - cleanup
+  - post-deploy-tests
+build:
+  stage: build
+  script:
+    - echo "Building the application..."
+    - mvn clean install
+test:
+  stage: test
+  script:
+    - echo "Running unit tests..."
+    - mvn test  
+docker-build:
+  stage: docker-build
+  script:
+    - echo "Building Docker image..."
+    - docker build -t my-app:$CI_COMMIT_SHA .
+    - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+    - docker push my-app:$CI_COMMIT_SHA
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying to Kubernetes..."
+    - kubectl apply -f k8s/deployment.yaml
+    - kubectl apply -f k8s/service.yaml
+security-scan:
+  stage: security-scan
+  script:
+    - echo "Running security scan..."
+    - trivy image my-app:$CI_COMMIT_SHA
+notify:
+  stage: notify
+  script:
+    - echo "Notifying on Slack..."
+    - curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"CI/CD Pipeline status: $CI_JOB_STATUS\"}" $SLACK_WEBHOOK_URL
+cleanup:
+  stage: cleanup
+  script:
+    - echo "Cleaning up..."
+    - docker logout
+post-deploy-tests:
+  stage: post-deploy-tests
+  script:
+    - echo "Running post-deployment tests..."
+    # Add commands to run post-deployment tests
+    # For example, you could use curl to test the application endpoint:
+    - curl -f http://my-app-service/healthz || exit 1
+# Notes:
+# .gitlab-ci.yml  
+# Purpose of .gitlab-ci.yml (defining CI/CD pipelines in GitLab)
+# Key components (stages, jobs, scripts)
+# Advanced Topics
+# Using GitLab CI/CD variables and secrets
+# Parallel and conditional jobs
+# Integrating GitLab CI/CD with Kubernetes and Helm
+

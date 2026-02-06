@@ -1,0 +1,113 @@
+# .dockerignore - Files/directories excluded from Docker build context
+# Improves build cache and reduces unnecessary data sent to Docker daemon
+
+# Version Control
+.git
+.gitignore
+.gitattributes
+.github
+
+# IDE and Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+.sublime-project
+.sublime-workspace
+.eclipse
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+eclipse.ini
+
+# CI/CD
+.gitlab-ci.yml
+.github/workflows
+.travis.yml
+appveyor.yml
+.circleci
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+docs/
+*.md
+
+# Build artifacts
+build/
+dist/
+*.o
+*.a
+*.so
+*.dylib
+
+# Dependencies (will be fresh installed in container)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+venv/
+env/
+
+# Test files (won't be needed in production)
+__tests__/
+test/
+tests/
+*.test.js
+*.spec.js
+coverage/
+.nyc_output/
+
+# Environment files (use secrets instead)
+.env
+.env.local
+.env.*.local
+
+# OS files
+Thumbs.db
+ehthumbs.db
+
+# Docker files (not needed in image)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+docker/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+.cache
+tmp/
+temp/
+
+# Development tools
+Makefile
+*.mk
+dev-scripts/
+
+# Miscellaneous
+.editorconfig
+.prettierrc
+.eslintrc*
+tsconfig.json
+webpack.config.js

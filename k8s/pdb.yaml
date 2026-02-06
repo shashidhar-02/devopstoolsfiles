@@ -1,0 +1,22 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: my-pdb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: my-app
+  maxUnavailable: 1
+  maxAvailable: 3
+  
+
+# Notes:
+# PDB.yaml
+# Purpose of Pod Disruption Budgets (PDBs)
+# Defining minAvailable and maxUnavailable
+# Using PDBs with Deployments, StatefulSets, and DaemonSets
+# Advanced Topics
+# Interaction of PDBs with cluster autoscaling
+# Best practices for setting PDBs in production environments
+

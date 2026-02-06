@@ -1,0 +1,29 @@
+apiVersion: platform.devops/v1
+kind: ServiceCatalog
+metadata:
+  name: devops-self-service
+spec:
+  services:
+    - name: "standard-webapp"
+      description: "Three-tier web application (frontend, backend, database)"
+      owner: "platform-team"
+      templates:
+        - "standard-app-env"
+      guardrails:
+        - "non-root-containers"
+        - "no-latest-images"
+        - "resource-limits-required"
+      lifecycle:
+        staging: true
+        production: true
+    - name: "data-pipeline"
+      description: "Batch data pipeline with scheduled execution"
+      owner: "data-platform"
+      templates:
+        - "standard-app-env"
+      guardrails:
+        - "restricted-egress"
+        - "secret-rotation"
+      lifecycle:
+        staging: true
+        production: false

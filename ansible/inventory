@@ -1,0 +1,57 @@
+# Ansible Inventory - Static & Dynamic
+# Production Infrastructure
+
+[webservers]
+web01.example.com ansible_host=10.0.1.10
+web02.example.com ansible_host=10.0.1.11
+web03.example.com ansible_host=10.0.1.12
+
+[dbservers]
+db01.example.com ansible_host=10.0.2.10
+db02.example.com ansible_host=10.0.2.11
+
+[loadbalancers]
+lb01.example.com ansible_host=10.0.3.10
+lb02.example.com ansible_host=10.0.3.11
+
+[monitoring]
+monitor01.example.com ansible_host=10.0.4.10
+
+# Group of groups
+[production:children]
+webservers
+dbservers
+loadbalancers
+
+[staging:children]
+staging_webservers
+staging_dbservers
+
+[staging_webservers]
+stage-web01.example.com ansible_host=10.1.1.10
+
+[staging_dbservers]
+stage-db01.example.com ansible_host=10.1.2.10
+
+# Global variables
+[all:vars]
+ansible_user=ansible
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+# SSH Optimizations
+ansible_ssh_pipelining=True
+ansible_ssh_control_path=/tmp/ansible-ssh-%%h-%%p-%%r
+ansible_ssh_control_persist=60s
+
+# Environment-specific
+[production:vars]
+env=production
+backup_enabled=true
+monitoring_enabled=true
+
+[staging:vars]
+env=staging
+backup_enabled=false
+monitoring_enabled=false

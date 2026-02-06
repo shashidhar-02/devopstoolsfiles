@@ -1,0 +1,21 @@
+#helmm chart file to deploy an application to Kubernetes with upgrading image tag number now 53 next 54 using vlaues yaml it should be updated without changing the template files
+apiVersion: v2
+name: my-application
+description: A Helm chart for deploying my application  
+type: application 
+version: 1.0.0
+appVersion: "1.0.0"
+dependencies:
+  - name: my-dependency
+    version: 1.0.0
+    repository: "https://example.com/charts"
+# Notes:
+# Helm Chart.yaml
+# Purpose of Helm Charts (package, configure, and deploy applications)
+# Key fields (apiVersion, name, version, appVersion, dependencies)
+# Advanced Topics
+# Chart dependencies and repositories
+# Semantic versioning for chart versions
+# Using Helm hooks for custom deployment logic
+# Managing chart provenance and signatures
+

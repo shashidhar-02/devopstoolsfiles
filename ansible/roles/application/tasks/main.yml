@@ -1,0 +1,78 @@
+---
+# roles/application/tasks/main.yml
+# Application deployment and configuration
+
+- name: Create application directory
+  file:
+    path: "{{ app_deploy_path }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  tags: app
+
+- name: Clone application repository (idempotent)
+  git:
+    repo: "{{ app_repo }}"
+    dest: "{{ app_deploy_path }}"
+    version: "{{ app_version }}"
+    force: no
+  register: git_result
+  ignore_errors: yes  # Error recovery - repo might not exist
+  tags: app
+
+- name: Deploy application config (Jinja2 template)
+  template:
+    src: app-config.yml.j2
+    dest: "{{ app_deploy_path }}/config/app.yml"
+    mode: '0644'
+  notify: restart application
+  tags: app
+
+- name: Deploy worker configuration (for scaling)
+  template:
+    src: app-workers.conf.j2
+    dest: /etc/app/workers.conf
+    mode: '0644'
+  notify: restart application
+  tags:
+    - app
+    - scaling
+
+- name: Install application dependencies (conditional)
+  command: "npm install --production"
+  args:
+    chdir: "{{ app_deploy_path }}"
+  when: git_result is changed
+  tags: app
+
+- name: Create systemd service for application
+  template:
+    src: app.service.j2
+    dest: "/etc/systemd/system/{{ app_name }}.service"
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart application
+  tags: app
+
+- name: Enable and start application service (idempotent)
+  systemd:
+    name: "{{ app_name }}"
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  tags: app
+
+- name: Wait for application to be ready (health check)
+  uri:
+    url: "{{ health_check_url }}"
+    status_code: 200
+    timeout: 5
+  register: health_result
+  until: health_result is succeeded
+  retries: 10
+  delay: 3
+  tags:
+    - app
+    - healthcheck
