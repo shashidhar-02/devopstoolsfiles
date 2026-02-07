@@ -1,0 +1,124 @@
+# GitLab CI for Python applications
+# End-to-end pipeline with build, test, container, scan, and multi-env deploy
+
+stages:
+  - validate
+  - build
+  - test
+  - package
+  - docker
+  - scan
+  - deploy_dev
+  - deploy_staging
+  - deploy_prod
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  DOCKER_REGISTRY: "registry.example.com"
+  IMAGE_NAME: "sample-python-app"
+  IMAGE_TAG: "$DOCKER_REGISTRY/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
+  DOCKER_TLS_CERTDIR: "/certs"
+
+cache:
+  paths:
+    - .cache/pip
+
+validate:
+  stage: validate
+  image: python:3.11.8-slim
+  script:
+    - python --version
+    - pip --version
+
+build:
+  stage: build
+  image: python:3.11.8-slim
+  script:
+    - pip install -r requirements.txt
+    - python -m compileall .
+
+unit_tests:
+  stage: test
+  image: python:3.11.8-slim
+  script:
+    - pip install -r requirements.txt
+    - pip install -r requirements-dev.txt || true
+    - pytest -q
+
+package:
+  stage: package
+  image: python:3.11.8-slim
+  script:
+    - pip install build
+    - python -m build
+  artifacts:
+    paths:
+      - dist/
+
+container_build:
+  stage: docker
+  image: docker:24.0.7
+  services:
+    - name: docker:24.0.7-dind
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$DOCKER_REGISTRY"
+    - docker build -t "$IMAGE_TAG" .
+    - docker push "$IMAGE_TAG"
+    - echo "IMAGE_TAG=$IMAGE_TAG" > build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+container_scan:
+  stage: scan
+  image: aquasec/trivy:0.48.4
+  needs:
+    - container_build
+  script:
+    - trivy image --severity HIGH,CRITICAL --exit-code 1 "$IMAGE_TAG"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+.deploy_template:
+  image: bitnami/kubectl:1.29.2
+  script:
+    - kubectl config use-context "$KUBE_CONTEXT"
+    - kubectl -n "$KUBE_NAMESPACE" set image deploy/$KUBE_DEPLOYMENT $KUBE_CONTAINER="$IMAGE_TAG"
+    - kubectl -n "$KUBE_NAMESPACE" rollout status deploy/$KUBE_DEPLOYMENT
+
+deploy_dev:
+  stage: deploy_dev
+  extends: .deploy_template
+  variables:
+    KUBE_CONTEXT: "$KUBE_CONTEXT_DEV"
+    KUBE_NAMESPACE: "dev"
+    KUBE_DEPLOYMENT: "python-app"
+    KUBE_CONTAINER: "python-app"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy_staging:
+  stage: deploy_staging
+  extends: .deploy_template
+  variables:
+    KUBE_CONTEXT: "$KUBE_CONTEXT_STAGING"
+    KUBE_NAMESPACE: "staging"
+    KUBE_DEPLOYMENT: "python-app"
+    KUBE_CONTAINER: "python-app"
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy_prod:
+  stage: deploy_prod
+  extends: .deploy_template
+  variables:
+    KUBE_CONTEXT: "$KUBE_CONTEXT_PROD"
+    KUBE_NAMESPACE: "prod"
+    KUBE_DEPLOYMENT: "python-app"
+    KUBE_CONTAINER: "python-app"
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
