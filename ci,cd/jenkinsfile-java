@@ -1,0 +1,119 @@
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
+    environment {
+        MAVEN_HOME = tool 'Maven_3.9'
+        DOCKER_REGISTRY = 'registry.example.com'
+        IMAGE_NAME = 'sample-java-app'
+        IMAGE_TAG = "${DOCKER_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+        KUBE_CONTEXT_DEV = 'dev-context'
+        KUBE_CONTEXT_STAGING = 'staging-context'
+        KUBE_CONTEXT_PROD = 'prod-context'
+        KUBE_NAMESPACE = 'default'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate') {
+            steps {
+                sh "${MAVEN_HOME}/bin/mvn -B -DskipTests validate"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh "${MAVEN_HOME}/bin/mvn -B -DskipTests clean compile"
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                sh "${MAVEN_HOME}/bin/mvn -B test"
+            }
+        }
+
+        stage('Package') {
+            steps {
+                sh "${MAVEN_HOME}/bin/mvn -B -DskipTests package"
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            }
+        }
+
+        stage('Docker Build & Push') {
+            steps {
+                script {
+                    docker.withRegistry("https://${DOCKER_REGISTRY}", 'docker-registry-creds') {
+                        def appImage = docker.build(IMAGE_TAG)
+                        appImage.push()
+                    }
+                }
+            }
+        }
+
+        stage('Container Scan') {
+            steps {
+                sh "trivy image --severity HIGH,CRITICAL --exit-code 1 ${IMAGE_TAG}"
+            }
+        }
+
+        stage('Deploy Dev') {
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig-dev']) {
+                    sh "kubectl config use-context ${KUBE_CONTEXT_DEV}"
+                    sh "kubectl -n ${KUBE_NAMESPACE} set image deploy/java-app java-app=${IMAGE_TAG}"
+                    sh "kubectl -n ${KUBE_NAMESPACE} rollout status deploy/java-app"
+                }
+            }
+        }
+
+        stage('Deploy Staging') {
+            when {
+                beforeInput true
+                expression { return env.BRANCH_NAME == 'main' }
+            }
+            input {
+                message 'Approve deploy to staging?'
+            }
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig-staging']) {
+                    sh "kubectl config use-context ${KUBE_CONTEXT_STAGING}"
+                    sh "kubectl -n ${KUBE_NAMESPACE} set image deploy/java-app java-app=${IMAGE_TAG}"
+                    sh "kubectl -n ${KUBE_NAMESPACE} rollout status deploy/java-app"
+                }
+            }
+        }
+
+        stage('Deploy Prod') {
+            when {
+                beforeInput true
+                expression { return env.BRANCH_NAME == 'main' }
+            }
+            input {
+                message 'Approve deploy to production?'
+            }
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig-prod']) {
+                    sh "kubectl config use-context ${KUBE_CONTEXT_PROD}"
+                    sh "kubectl -n ${KUBE_NAMESPACE} set image deploy/java-app java-app=${IMAGE_TAG}"
+                    sh "kubectl -n ${KUBE_NAMESPACE} rollout status deploy/java-app"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}

@@ -1,0 +1,123 @@
+# GitLab CI for Node.js applications
+# End-to-end pipeline with build, test, container, scan, and multi-env deploy
+
+stages:
+  - validate
+  - build
+  - test
+  - package
+  - docker
+  - scan
+  - deploy_dev
+  - deploy_staging
+  - deploy_prod
+
+variables:
+  NODE_ENV: "production"
+  DOCKER_REGISTRY: "registry.example.com"
+  IMAGE_NAME: "sample-node-app"
+  IMAGE_TAG: "$DOCKER_REGISTRY/$IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
+  DOCKER_TLS_CERTDIR: "/certs"
+
+cache:
+  paths:
+    - node_modules/
+
+validate:
+  stage: validate
+  image: node:20.11.1-alpine
+  script:
+    - node --version
+    - npm --version
+
+build:
+  stage: build
+  image: node:20.11.1-alpine
+  script:
+    - npm ci
+    - npm run build
+
+unit_tests:
+  stage: test
+  image: node:20.11.1-alpine
+  script:
+    - npm ci
+    - npm test
+
+package:
+  stage: package
+  image: node:20.11.1-alpine
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+
+container_build:
+  stage: docker
+  image: docker:24.0.7
+  services:
+    - name: docker:24.0.7-dind
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$DOCKER_REGISTRY"
+    - docker build -t "$IMAGE_TAG" .
+    - docker push "$IMAGE_TAG"
+    - echo "IMAGE_TAG=$IMAGE_TAG" > build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+container_scan:
+  stage: scan
+  image: aquasec/trivy:0.48.4
+  needs:
+    - container_build
+  script:
+    - trivy image --severity HIGH,CRITICAL --exit-code 1 "$IMAGE_TAG"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+.deploy_template:
+  image: bitnami/kubectl:1.29.2
+  script:
+    - kubectl config use-context "$KUBE_CONTEXT"
+    - kubectl -n "$KUBE_NAMESPACE" set image deploy/$KUBE_DEPLOYMENT $KUBE_CONTAINER="$IMAGE_TAG"
+    - kubectl -n "$KUBE_NAMESPACE" rollout status deploy/$KUBE_DEPLOYMENT
+
+deploy_dev:
+  stage: deploy_dev
+  extends: .deploy_template
+  variables:
+    KUBE_CONTEXT: "$KUBE_CONTEXT_DEV"
+    KUBE_NAMESPACE: "dev"
+    KUBE_DEPLOYMENT: "node-app"
+    KUBE_CONTAINER: "node-app"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy_staging:
+  stage: deploy_staging
+  extends: .deploy_template
+  variables:
+    KUBE_CONTEXT: "$KUBE_CONTEXT_STAGING"
+    KUBE_NAMESPACE: "staging"
+    KUBE_DEPLOYMENT: "node-app"
+    KUBE_CONTAINER: "node-app"
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy_prod:
+  stage: deploy_prod
+  extends: .deploy_template
+  variables:
+    KUBE_CONTEXT: "$KUBE_CONTEXT_PROD"
+    KUBE_NAMESPACE: "prod"
+    KUBE_DEPLOYMENT: "node-app"
+    KUBE_CONTAINER: "node-app"
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
